@@ -1,0 +1,12 @@
+[http]
+ip = 127.0.0.1
+port = 8000
+
+[hub]
+ip = your.dc.hub
+port = 411
+
+[dc]
+nick = [HDK]hadcc_test
+sharedir = /mnt/share
+downloaddir = .

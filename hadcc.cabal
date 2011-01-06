@@ -1,0 +1,15 @@
+Name:                hadcc
+Version:             0.1
+Synopsis:            Haskell DC client
+Description:         Haskell DC client
+License:             GPL
+License-file:        LICENSE
+Author:              Florian Richter
+Maintainer:          Florian Richter <mail@f1ori.de>
+Build-Depends:       base,bzlib,TigerHash,haskell98,bytestring,filepath,directory,mtl,split,network
+Build-Type:          Simple
+
+Executable:          hadcc
+Main-is:             Hadcc.hs
+data-files:          README
+

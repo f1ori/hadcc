@@ -1,0 +1,6 @@
+How to install:
+
+$ runhaskell Setup.lhs configure --prefix=$HOME --user
+$ runhaskell Setup.lhs build
+$ runhaskell Setup.lhs install
+

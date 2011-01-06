@@ -63,7 +63,7 @@ handleHub appState h conState msg = do
         Just "$Lock"    -> do
 	                       putStrLn "Lock"
 	                       hPutStr h "$Key ........A .....0.0. 0. 0. 0. 0. 0.|"
-	                       hPutStr h "$ValidateNick [HDK]hadcc_test|"
+	                       hPutStr h ("$ValidateNick " ++ (configNick $ appConfig appState) ++ "|")
 			       hFlush h
 			       return conState
         Just "$HubName" -> do
@@ -73,7 +73,7 @@ handleHub appState h conState msg = do
 	                       putStrLn "gogogo"
 	                       hPutStr h "$Version 1,0091|"
 			       -- http://www.teamfair.info/wiki/index.php?title=$MyINFO
-	                       hPutStr h "$MyINFO $ALL [HDK]hadcc_test haskell dc client test<hdc V:0.1,M:A,H:1/0/0,S:10>$ $1GBit.$anonymous@hadiko.de$311139447257$|"
+	                       hPutStr h ("$MyINFO $ALL " ++ (configNick $ appConfig appState) ++ " haskell dc client test<hdc V:0.1,M:A,H:1/0/0,S:10>$ $1GBit.$anonymous@example.com 311139447257$|")
 			       hFlush h
 			       return conState
         Just "$MyINFO" -> do
@@ -106,7 +106,7 @@ sendCmd h cmd = do
 startupClient :: AppState -> Handle -> IO ()
 startupClient appState h = do
     putStrLn "startup client"
-    hPutStr h "$MyNick [HDK]hadcc_test|$Lock EXTENDEDPROTOCOLABCABCABCABCABCABC Pk=HASKELLDC00.668ABCABC|"
+    hPutStr h ("$MyNick " ++ (configNick $ appConfig appState) ++ "|$Lock EXTENDEDPROTOCOLABCABCABCABCABCABC Pk=HASKELLDC00.668ABCABC|")
     hFlush h
 
 handleClient :: AppState -> Handle -> ConnectionState -> String -> IO ConnectionState

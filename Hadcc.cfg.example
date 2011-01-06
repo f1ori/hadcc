@@ -8,5 +8,8 @@ port = 411
 
 [dc]
 nick = hadcc_test
+email = anonymous@example.com
+description = your description
+sharesize = 300000000000
 sharedir = /mnt/share
 downloaddir = .

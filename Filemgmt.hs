@@ -7,11 +7,13 @@ module Filemgmt (
 import System.IO
 import qualified Data.ByteString.Lazy as L
 import Control.Monad
+import Control.Concurrent
 import Filelist
+import Config
 
-getFileSize :: String -> IO (Maybe Integer)
-getFileSize path = do
-    list <- getFileList "/mnt/music"
+getFileSize :: AppState -> String -> IO (Maybe Integer)
+getFileSize appState path = do
+    list <- readMVar $ appFileTree appState
     if path == "files.xml.bz2"
         then
             return $ Just (fromIntegral $ L.length (getXmlBZList list))
@@ -22,9 +24,9 @@ getFileSize path = do
                 Nothing -> return Nothing
 
 
-getFileContent :: String -> Integer -> IO (Maybe L.ByteString)
-getFileContent path offset = do
-    list <- getFileList "/mnt/music"
+getFileContent :: AppState -> String -> Integer -> IO (Maybe L.ByteString)
+getFileContent appState path offset = do
+    list <- readMVar $ appFileTree appState
     if path == "files.xml.bz2"
         then
             return $ Just (getXmlBZList list)

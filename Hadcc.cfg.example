@@ -7,6 +7,6 @@ ip = your.dc.hub
 port = 411
 
 [dc]
-nick = [HDK]hadcc_test
+nick = hadcc_test
 sharedir = /mnt/share
 downloaddir = .

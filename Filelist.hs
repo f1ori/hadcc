@@ -44,8 +44,8 @@ getFile :: FilePath -> IO Node
 getFile path = do
     size <- getSystemFileSize path
     modTime <- getModificationTime path
-    --hash <- getHashForFile path
-    return ( FileNode (takeFileName path) path size modTime Nothing )
+    hash <- getHashForFile path
+    return ( FileNode (takeFileName path) path size modTime (Just hash) )
 
 
 getSystemFileSize :: FilePath -> IO Integer
@@ -90,14 +90,16 @@ searchFile path root = case root of
 
 
 getXmlList :: Node -> String
-getXmlList node = "<FileListing Version=\"1\" Generator=\"hdc V:0.1\">" ++ (getXmlListRec node) ++ "</FileListing>"
+getXmlList node = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" ++ 
+        "<FileListing Version=\"1\" Generator=\"hdc V:0.1\">" ++ 
+        (getXmlListRec node) ++ "</FileListing>"
     where
         getXmlListRec :: Node -> String
         getXmlListRec node = concat (traverse startNode endNode node)
 	-- TODO: escape
 	startNode (DirNode name _ _) = "<Directory Name=\"" ++ name ++ "\">"
-	startNode (FileNode name _ size _ (Just hash)) = "<File Name=\"" ++ name ++ "\" Size=\"" ++ (show size) ++ "\" TTH=\"" ++ hash ++ "\">"
-	startNode (FileNode name _ size _ _) = "<File Name=\"" ++ name ++ "\" Size=\"" ++ (show size) ++ "\">"
+	startNode (FileNode name _ size _ (Just hash)) = "<File Name=\"" ++ name ++ "\" Size=\"" ++ (show size) ++ "\" TTH=\"" ++ hash ++ "\"/>"
+	startNode (FileNode name _ size _ _) = "<File Name=\"" ++ name ++ "\" Size=\"" ++ (show size) ++ "\"/>"
 	endNode (DirNode name _ _) = "</Directory>"
 	endNode _ = ""
 

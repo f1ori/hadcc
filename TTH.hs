@@ -70,7 +70,7 @@ hashFileList appState = do
 getHashForFile :: FilePath -> IO String
 getHashForFile path = do
     content <- L.readFile path
-    return $! b32TigerHash (tigerTreeHash content)
+    return $! filter (/='=') $ b32TigerHash (tigerTreeHash content)
 
 -- test with runhaskell tth.hs tth file.ext
 --main = liftM (!!1) getArgs >>= getHashForFile >>= putStrLn

@@ -14,26 +14,28 @@ import Config
 
 getFileSize :: AppState -> String -> IO (Maybe Integer)
 getFileSize appState path = do
-    list <- readMVar $ appFileTree appState
-    if path == "files.xml.bz2"
-        then
-            return $ Just (fromIntegral $ L.length (getXmlBZList list))
-        else do
-            let file = searchFile path list
-            case file of
+    fileTree <- readMVar $ appFileTree appState
+    case path of
+        path | "files.xml.bz2" == path -> return $ Just (fromIntegral $ L.length (getXmlBZList fileTree))
+             | "TTH/" == (take 4 path) -> returnFileSize (searchHash (drop 4 path) fileTree)
+             | otherwise               -> returnFileSize (searchFile path fileTree)
+    where
+        returnFileSize node = 
+            case node of
                 Just f -> return $ Just (fileNodeSize f)
                 Nothing -> return Nothing
 
 
 getFileContent :: AppState -> String -> Integer -> IO (Maybe L.ByteString)
 getFileContent appState path offset = do
-    list <- readMVar $ appFileTree appState
-    if path == "files.xml.bz2"
-        then
-            return $ Just (getXmlBZList list)
-        else do
-            let file = searchFile path list
-            case file of
+    fileTree <- readMVar $ appFileTree appState
+    case path of
+        path | "files.xml.bz2" == path -> return $ Just (getXmlBZList fileTree)
+             | "TTH/" == (take 4 path) -> returnStream (searchHash (drop 4 path) fileTree)
+             | otherwise               -> returnStream (searchFile path fileTree)
+    where
+        returnStream node =
+            case node of
                 Just f -> do
                               stream <- (getSystemFileContentsWithOffset (fileNodePath f) offset)
                               return $ Just stream

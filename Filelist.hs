@@ -62,20 +62,28 @@ treeSize node = sum (traverse getSize (\n -> 0) node)
         getSize (DirNode _ _ _) = 0
         getSize (FileNode _ _ size _ _) = size
 
-searchFile :: String -> Node -> Maybe Node
-searchFile path root = case root of
-    FileNode name _ _ _ _ -> if path == name then Just root else Nothing
-    DirNode name _ children -> if (firstPath path) == name
-                               then firstNotNothing $ map (searchFile (restPath path)) children
-			       else Nothing
-    where
-        firstNotNothing [] = Nothing
-        firstNotNothing ((Just x):xs) = Just x
-        firstNotNothing (Nothing:xs) = firstNotNothing xs
+firstNotNothing :: [Maybe a] -> Maybe a
+firstNotNothing [] = Nothing
+firstNotNothing ((Just x):xs) = Just x
+firstNotNothing (Nothing:xs) = firstNotNothing xs
 
+searchFile :: String -> Node -> Maybe Node
+searchFile path file@(FileNode name _ _ _ _)
+        | path == name             = Just file
+	| otherwise                = Nothing
+searchFile path (DirNode name _ children)
+        | (firstPath path) == name = firstNotNothing $ map (searchFile (restPath path)) children
+	| otherwise                = Nothing
+    where
 	firstPath path = takeWhile (/='/') path
 	restPath path = tail $ dropWhile (/='/') path
 
+searchHash :: String -> Node -> Maybe Node
+searchHash hash file@(FileNode _ _ _ _ (Just fhash))
+        | fhash == hash                = Just file
+	| otherwise                    = Nothing
+searchHash hash (FileNode _ _ _ _ _)   = Nothing
+searchHash hash (DirNode _ _ children) = firstNotNothing $ map (searchHash hash) children
 
 getXmlList :: Node -> String
 getXmlList node = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" ++ 

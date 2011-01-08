@@ -2,9 +2,11 @@ module Config where
 
 import System.IO
 import Control.Concurrent
-import Filelist
 import Data.ConfigFile
 import Data.Either.Utils
+import FilelistTypes
+import TTHTypes
+
 
 data AppConfig = AppConfig {
       configHttpIp :: String
@@ -25,6 +27,7 @@ data AppState = AppState {
     , appDownloads :: MVar [String]
     , appHubHandle :: MVar Handle
     , appNickList :: MVar [String]
+    , appTTHCache :: MVar TTHCache
     }
 
 loadConfig :: FilePath -> IO AppConfig
@@ -48,12 +51,12 @@ loadConfig configFile = do
 
 newAppState :: AppConfig -> IO AppState
 newAppState appConfig = do
-    fileTreeNode <- getFileList (configShareDir appConfig)
-    fileTree <- newMVar fileTreeNode
+    fileTree <- newEmptyMVar
     uploads <- newMVar []
     downloads <- newMVar []
     nicklist <- newEmptyMVar
     hubHandle <- newEmptyMVar
+    tthCache <- newEmptyMVar
     return AppState {
                      appConfig = appConfig
                    , appFileTree = fileTree
@@ -61,6 +64,7 @@ newAppState appConfig = do
                    , appDownloads = downloads
                    , appHubHandle = hubHandle
                    , appNickList = nicklist
+                   , appTTHCache = tthCache
                    }
 
 

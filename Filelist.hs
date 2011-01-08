@@ -10,42 +10,30 @@ import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Codec.Compression.BZip as BZip
 
 
+import FilelistTypes
 import TTH
-
-data Node = DirNode  {
-	               dirNodeName     :: String
-	             , dirNodePath     :: FilePath
-                     , dirNodeChildren :: [Node]
-                     }
-          | FileNode {
-	               fileNodeName    :: String
-	             , fileNodePath    :: FilePath
-	             , fileNodeSize    :: Integer
-	             , fileNodeModTime :: ClockTime
-	             , fileNodeHash    :: Maybe String
-	             }
-	    deriving (Eq, Show)
+import Config
 
 
-getFileList :: FilePath -> IO Node
-getFileList dir = do
+getFileList :: AppState -> FilePath -> IO Node
+getFileList appState dir = do
     names <- getUsefulContents dir
     let paths = map (dir </>) names
     nodes <- (forM paths $ \path -> do
 	        isDirectory <- doesDirectoryExist path
 	        if isDirectory
-	          then getFileList path
-	          else getFile path
+	          then getFileList appState path
+	          else getFile appState path
 	     )
     return (DirNode (last (splitDirectories dir)) dir nodes)
 
 
-getFile :: FilePath -> IO Node
-getFile path = do
+getFile :: AppState -> FilePath -> IO Node
+getFile appState path = do
     size <- getSystemFileSize path
-    modTime <- getModificationTime path
-    hash <- getHashForFile path
-    return ( FileNode (takeFileName path) path size modTime (Just hash) )
+    modTime <- toUTCTime `liftM` getModificationTime path
+    hash <- getCachedHash appState path modTime
+    return ( FileNode (takeFileName path) path size modTime hash )
 
 
 getSystemFileSize :: FilePath -> IO Integer

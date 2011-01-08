@@ -8,6 +8,7 @@ import System.IO
 import qualified Data.ByteString.Lazy as L
 import Control.Monad
 import Control.Concurrent
+import FilelistTypes
 import Filelist
 import Config
 

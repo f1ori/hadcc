@@ -1,0 +1,51 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<title>Hadcc</title>
+<!--<link rel="stylesheet" type="text/css" href="js/dijit/themes/claro/claro.css" />-->
+<link rel="stylesheet" type="text/css" href="http://o.aolcdn.com/dojo/1.5/dijit/themes/claro/claro.css" />
+<!--<script src="js/dojo/dojo.js" djConfig="parseOnLoad: true, isDebug: true"></script>-->
+<script src="http://o.aolcdn.com/dojo/1.5/dojo/dojo.xd.js" type="text/javascript" djConfig="parseOnLoad: true, isDebug: true"></script>
+<script type="text/javascript">
+    dojo.require("dijit.layout.TabContainer");
+    dojo.require("dijit.layout.ContentPane");
+    dojo.require("dojox.grid.DataGrid");
+    dojo.require("dojo.data.ItemFileReadStore");
+</script>
+<style type="text/css">
+  @import "http://o.aolcdn.com/dojo/1.5/dojox/grid/resources/Grid.css";
+  @import "http://o.aolcdn.com/dojo/1.5/dojox/grid/resources/claroGrid.css";
+
+  .dojoxGrid table {
+    margin: 0;
+  }
+</style>
+</head>
+<body class=" claro ">
+<h2>Hadcc</h2>
+<div style="width: 900px; height: 400px">
+    <div dojoType="dijit.layout.TabContainer" style="width: 100%; height: 100%;">
+        <div dojoType="dijit.layout.ContentPane" title="Nicklist" selected="true">
+            <span dojoType="dojo.data.ItemFileReadStore" jsId="nicklistStore" url="http://127.0.0.1:8000/nicklist">
+            </span>
+            <table dojoType="dojox.grid.DataGrid" jsId="nicklistGrid" store="nicklistStore" query="{ name: '*' }"
+            clientSort="true" style="width: 100%; height: 100%;">
+                <thead>
+                    <tr>
+                        <th width="200px" field="name">
+                            Nickname
+                        </th>
+                    </tr>
+                </thead>
+            </table>
+        </div>
+        <div dojoType="dijit.layout.ContentPane" title="Chat">
+            Chat
+        </div>
+        <div dojoType="dijit.layout.ContentPane" title="User" closable="true">
+            User
+        </div>
+   </div>
+</div>
+</body>
+</html>

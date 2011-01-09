@@ -37,7 +37,7 @@ handleHub appState h conState msg = do
 			       return conState
         Just "$NickList" -> do
 	                       putStrLn ("Nicklist: " ++ msg)
-                               let nicklist = splitOn "$$" (tail $ dropWhile (/=' ') msg)
+                               let nicklist = filter (/="") (splitOn "$$" (tail $ dropWhile (/=' ') msg))
                                putMVar (appNickList appState) nicklist
 			       return conState
         Just "$Chat" -> do

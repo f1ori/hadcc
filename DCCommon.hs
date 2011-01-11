@@ -4,6 +4,8 @@ import Network.Socket
 import System.IO
 import Config
 import Data.List.Split
+import Foreign.Marshal.Error (void)
+import Control.Exception (handle, AsyncException)
 
 data ConnectionState = DontKnow
                      | Upload String Integer
@@ -22,9 +24,12 @@ tcpLoop appState host port conState start handler = do
     -- send some commands at start
     start appState h
     messages <- hGetContents h
-    procMessages appState h conState handler (splitMessages messages)
+    handle nothingWithUserInterrupt (procMessages appState h conState handler (splitMessages messages))
     hClose h
     putStrLn "closed"
+    where
+        nothingWithUserInterrupt :: AsyncException -> IO ()
+        nothingWithUserInterrupt e = return ()
 
 procMessages :: AppState -> Handle -> ConnectionState -> (AppState -> Handle -> ConnectionState -> String -> IO ConnectionState) -> [String] -> IO ()
 procMessages appState h conState handler [] = return ()

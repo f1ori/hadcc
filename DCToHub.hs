@@ -59,3 +59,10 @@ handleHub appState h conState msg = do
 	                       putStrLn msg
 			       return conState
 
+getNickList :: AppState -> IO [String]
+getNickList appState = do
+    withMVar (appHubHandle appState) $ \hubHandle -> do
+        hPutStr hubHandle "$GetNickList|"
+        hFlush hubHandle
+    nicklist <- takeMVar (appNickList appState)
+    return nicklist

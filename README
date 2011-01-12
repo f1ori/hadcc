@@ -1,3 +1,10 @@
+How to run:
+
+rename and edit config file
+
+$ runhaskell Hadcc.hs
+
+
 How to install:
 
 $ runhaskell Setup.lhs configure --prefix=$HOME --user

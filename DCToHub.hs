@@ -48,7 +48,8 @@ handleHub appState h conState msg = do
 			       let host = takeWhile (/=':') hostport
 			       let port = tail $ dropWhile (/=':') hostport
 	                       putStrLn ("Connect to me " ++ hostport)
-			       forkIO $ tcpLoop appState host port DontKnow startupClient handleClient
+			       forkIO $ openDCConnection host port (ToClient Nothing DontKnow)
+			                                 (startupClient appState) (handleClient appState)
 			       return conState
         Nothing         -> do
 	                       putStrLn "No Command:"
@@ -59,6 +60,7 @@ handleHub appState h conState msg = do
 	                       putStrLn msg
 			       return conState
 
+-- | synchronous fetch of nicklist (threadsafe)
 getNickList :: AppState -> IO [String]
 getNickList appState = do
     withMVar (appHubHandle appState) $ \hubHandle -> do

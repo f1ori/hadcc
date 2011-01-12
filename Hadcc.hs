@@ -17,6 +17,6 @@ main = do
     hashFileList appState
     withMVar (appFileTree appState) (\tree -> putStrLn $ show tree)
     forkIO $ httpServer appState httpHandler
-    tcpLoop appState (configHubIp config) (configHubPort config) DontKnow startupHub handleHub
+    openDCConnection (configHubIp config) (configHubPort config) ToHub (startupHub appState) (handleHub appState)
 
 -- vim: sw=4 expandtab

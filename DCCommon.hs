@@ -2,45 +2,82 @@ module DCCommon where
 
 import Network.Socket
 import System.IO
-import Config
 import Data.List.Split
 import Foreign.Marshal.Error (void)
-import Control.Exception (handle, AsyncException)
+import Control.Exception (handle, AsyncException, finally)
+import Config
+import Tcp
 
-data ConnectionState = DontKnow
-                     | Upload String Integer
-                     | Download String
+data State = DontKnow
+           | Upload String Integer
+           | Download
+-- | connection state
+data ConnectionState = ToClient (Maybe String) State
+                     | ToHub
 
 
-tcpLoop :: AppState -> String -> String -> ConnectionState -> (AppState -> Handle -> IO ()) -> (AppState -> Handle -> ConnectionState -> String -> IO ConnectionState) -> IO ()
-tcpLoop appState host port conState start handler = do
-    addrinfos <- getAddrInfo Nothing (Just host) (Just port)
-    let serveraddr = head addrinfos
-    sock <- socket (addrFamily serveraddr) Stream defaultProtocol
-    setSocketOption sock KeepAlive 1
-    connect sock (addrAddress serveraddr)
+-- | set nickname in ConnectionState
+setNickInState :: ConnectionState -> String -> ConnectionState
+setNickInState (ToClient _ state) nick = ToClient (Just nick) state
+
+-------------------------------------------------------------
+
+-- | start client connection
+openDCConnection :: String   -- ^ host name to connect
+                 -> String   -- ^ port number
+                 -> ConnectionState -- ^ initial connection state
+                 -> (Handle -> IO ()) -- ^ handler called right after connection is established
+                 -> (Handle -> ConnectionState -> String -> IO ConnectionState) -- ^ handler called for every DC message
+                 -> IO ()
+openDCConnection host port conState startHandler mainHandler = do
+    (sock, addr) <- tcpClientConnect host port
+    dcConnectionHandler conState startHandler mainHandler sock addr
+
+-- | start listening for connections (blocks)
+startDCServer :: String -- ^ hostname/ip to listen on
+              -> String -- ^ port number to listen on
+              -> ConnectionState -- ^ initial connection state
+              -> (Handle -> IO ()) -- ^ handler called right after connection is established
+              -> (Handle -> ConnectionState -> String -> IO ConnectionState) -- ^ handler called for every DC message
+              -> IO ()
+startDCServer ip port conState startHandler mainHandler =
+    tcpServer ip port (dcConnectionHandler conState startHandler mainHandler)
+
+------------------------------------------------------------
+
+-- | handles dc connection on socket level
+dcConnectionHandler :: ConnectionState
+                    -> (Handle -> IO ()) -- ^ handler called right after connection is established
+                    -> (Handle -> ConnectionState -> String -> IO ConnectionState) -- ^ handler called for every DC message
+                    -> Socket
+                    -> SockAddr
+                    -> IO ()
+dcConnectionHandler conState startHandler mainHandler sock addr = do
     h <- socketToHandle sock ReadWriteMode
     hSetBuffering h (BlockBuffering Nothing)
     -- send some commands at start
-    start appState h
+    startHandler h
     messages <- hGetContents h
-    handle nothingWithUserInterrupt (procMessages appState h conState handler (splitMessages messages))
-    hClose h
+    (procMessages h conState mainHandler (splitMessages messages)) `finally` hClose h
     putStrLn "closed"
-    where
-        nothingWithUserInterrupt :: AsyncException -> IO ()
-        nothingWithUserInterrupt e = return ()
 
-procMessages :: AppState -> Handle -> ConnectionState -> (AppState -> Handle -> ConnectionState -> String -> IO ConnectionState) -> [String] -> IO ()
-procMessages appState h conState handler [] = return ()
-procMessages appState h conState handler [""] = return ()
-procMessages appState h conState handler (msg:msgs) = do
-    newState <- handler appState h conState msg
-    procMessages appState h newState handler msgs
+------------------------------------------------------
 
+-- | process messages from hub or peer
+procMessages :: Handle -> ConnectionState -> (Handle -> ConnectionState -> String -> IO ConnectionState) -> [String] -> IO ()
+procMessages h conState handler [] = return ()
+procMessages h conState handler [""] = return ()
+procMessages h conState handler (msg:msgs) = do
+    newState <- handler h conState msg
+    procMessages h newState handler msgs
+
+
+-- | split messages from hub or peer
 splitMessages :: String -> [String]
 splitMessages stream = splitOn "|" stream
     
+
+-- | extracts command from DC message
 getCmd :: String -> Maybe String
 getCmd msg = if null msg then Nothing
     else if (head msg) == '$'
@@ -49,7 +86,12 @@ getCmd msg = if null msg then Nothing
            then Just "$Chat"
            else Nothing
 
-sendCmd :: Handle -> String -> String -> IO ()
+
+-- | send DC command via socket handle (so you don't get the formatation wrong :) )
+sendCmd :: Handle -- ^ socket handle
+        -> String -- ^ command
+        -> String -- ^ arguments
+        -> IO ()
 sendCmd h cmd param = do
     hPutStr h ("$" ++ cmd ++ " " ++ param ++ "|")
     hFlush h

@@ -17,6 +17,13 @@ toLowerCase :: String -> String
 toLowerCase [] = []
 toLowerCase (x:xs) = (toLower x) : xs
 
+nextToDownload :: AppState -> Nick -> IO (Maybe String)
+nextToDownload appState nick = do
+    jobs <- atomically $ readTVar (appJobs appState)
+    case M.lookup nick jobs of
+        Just (_, (x:xs)) -> return (Just x)
+        _                -> return Nothing
+
 -- | connection startup handler, send nick
 startupClient :: AppState -> Handle -> IO ()
 startupClient appState h = do
@@ -33,13 +40,16 @@ handleClient appState h conState msg = do
                                 -- TODO: check if known
                                 let nick = tail $ dropWhile (/=' ') msg
 	                        putStrLn ("Connection from: " ++ nick)
-				return (setNickInState conState nick)
+                                next <- nextToDownload appState nick
+                                case next of
+                                    Just file -> return (ToClient (Just nick) Download)
+                                    Nothing   -> return (ToClient (Just nick) DontKnow)
         Just "$Lock"    -> do
 	                       putStrLn "Lock"
                                sendCmd h "Supports" "MiniSlots XmlBZList ADCGet TTHF"
                                let ToClient nick state = conState
                                case state of
-                                   Download -> sendCmd h "Direction" "Download 4242"
+                                   Download -> sendCmd h "Direction" "Download 42"
                                    _        -> sendCmd h "Direction" "Upload 42"
                                sendCmd h "Key" "........A .....0.0. 0. 0. 0. 0. 0."
 			       return conState
@@ -56,12 +66,16 @@ handleClient appState h conState msg = do
         Just "$Direction"   -> do
 	                       putStrLn "Direction"
                                let direction = toLowerCase $ takeWhile (/=' ') $ tail $ dropWhile (/=' ') msg
-                               let ToClient nick state = conState
+                               let ToClient (Just nick) state = conState
                                case state of
-                                   -- we don't like random number battles :)
+                                   -- I don't like random number battles :)
                                    Download -> if direction /= "upload" then hClose h else return ()
                                    _        -> if direction /= "download" then hClose h else return ()
                                    -- wtf, what does he want?
+                               next <- nextToDownload appState nick
+                               case next of
+                                   Just file -> sendCmd h "ADCGET" ("file " ++ file ++ " 0 -1")
+                                   _         -> return ()
 			       return conState
         Just "$Get"   -> do
 	                       putStrLn "Get"
@@ -87,7 +101,8 @@ handleClient appState h conState msg = do
                                    Just c -> do
 	                               L.hPut h c
 			               hFlush h
-			               hClose h
+			               --hClose h
+                                       putStrLn "written"
 			               return (ToClient Nothing DontKnow)
                                    Nothing -> do
                                        sendCmd h "Error" "File not found"
@@ -125,6 +140,23 @@ handleClient appState h conState msg = do
                                                putStrLn ("File not Found: " ++ filename)
                                                sendCmd h "Error" "File not Available"
 			                       return (ToClient Nothing DontKnow)
+        Just "$ADCSND"   -> do
+	                       putStrLn "ADCSND"
+	                       let msg_split = splitOn " " msg
+	                       putStrLn (show msg_split)
+                               if ((length msg_split) /= 5) || ((msg_split !! 1) /= "file")
+                                   then do
+                                       sendCmd h "Error" "invalid parameters to ADCSND"
+                                       hClose h
+			               return (ToClient Nothing DontKnow)
+                                   else do
+                                       let filename = msg_split !! 2
+	                               -- let fileOffset = read (msg_split !! 3)
+	                               let fileBufSize = read (msg_split !! 4)
+                                       let (ToClient (Just nick) _) = conState
+                                       if filename == "files.xml.bz2"
+                                           then return (ToClient Nothing (DownloadJob fileBufSize filelistHandler))
+                                           else return (ToClient Nothing (DownloadJob fileBufSize downloadHandler))
         Nothing         -> do
 	                       putStrLn "No Command:"
 	                       putStrLn msg
@@ -133,13 +165,22 @@ handleClient appState h conState msg = do
 	                       putStrLn "Unkown command:"
 	                       putStrLn msg
 			       return conState
+    where
+        downloadHandler :: L.ByteString -> IO ()
+        downloadHandler file = do
+            L.writeFile "test.bla" file
+        filelistHandler :: L.ByteString -> IO ()
+        filelistHandler file = do
+            L.writeFile "test.bla" file
 
 -- | asyncronous download start, should be called from different thread
 downloadFile :: AppState -> Nick -> String -> IO ()
 downloadFile appState nick file = do
+    putStrLn "insert download"
+    putStrLn (nick ++ " " ++ (configMyIp $ appConfig appState) ++ ":" ++ (configMyPort $ appConfig appState))
     atomically markFileAndNick
     withMVar (appHubHandle appState) $ \hubHandle -> do
-    sendCmd hubHandle "ConnectToMe" (nick ++ " " ++ (configMyIp $ appConfig appState) ++ ":" ++ (configMyPort $ appConfig appState))
+        sendCmd hubHandle "ConnectToMe" (nick ++ " " ++ (configMyIp $ appConfig appState) ++ ":" ++ (configMyPort $ appConfig appState))
 
     where
         markFileAndNick = do

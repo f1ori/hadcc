@@ -10,6 +10,7 @@ import Data.List
 
 import Http
 import DCToHub
+import DCToClient
 import Config
 
 mkResponse :: String -> String -> Response String
@@ -28,6 +29,15 @@ httpHandler appState addr url request = do
         "/nicklist" -> do
             nicklist <- getDojoNickList appState
             return (mkResponse "text/json" nicklist)
+        path | (take 10 path) == "/filelist/" -> do
+            filelist <- getDojoFileList appState (urlDecode (drop 10 path))
+            return (mkResponse "text/json" filelist)
+        _ -> return (mkResponse "text/plain" "not found")
+
+getDojoFileList :: AppState -> Nick -> IO String
+getDojoFileList appState nick = do
+    downloadFile appState nick "files.xml.bz2"
+    return "OK"
 
 
 getDojoNickList :: AppState -> IO String

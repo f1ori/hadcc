@@ -3,6 +3,8 @@ module DCCommon where
 import Network.Socket
 import System.IO
 import Data.List.Split
+import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString.Lazy.Char8 as C
 import Foreign.Marshal.Error (void)
 import Control.Exception (handle, AsyncException, finally)
 import Config
@@ -11,16 +13,10 @@ import Tcp
 data State = DontKnow
            | Upload String Integer
            | Download
+           | DownloadJob Integer (L.ByteString -> IO ())
 -- | connection state
-data ConnectionState = ToClient (Maybe String) State
+data ConnectionState = ToClient (Maybe Nick) State
                      | ToHub
-
-
--- | set nickname in ConnectionState
-setNickInState :: ConnectionState -> String -> ConnectionState
-setNickInState (ToClient _ state) nick = ToClient (Just nick) state
-
--------------------------------------------------------------
 
 -- | start client connection
 openDCConnection :: String   -- ^ host name to connect
@@ -57,25 +53,28 @@ dcConnectionHandler conState startHandler mainHandler sock addr = do
     hSetBuffering h (BlockBuffering Nothing)
     -- send some commands at start
     startHandler h
-    messages <- hGetContents h
-    (procMessages h conState mainHandler (splitMessages messages)) `finally` hClose h
+    content <- L.hGetContents h
+    (procMessages h conState mainHandler content) `finally` hClose h
     putStrLn "closed"
 
 ------------------------------------------------------
 
 -- | process messages from hub or peer
-procMessages :: Handle -> ConnectionState -> (Handle -> ConnectionState -> String -> IO ConnectionState) -> [String] -> IO ()
-procMessages h conState handler [] = return ()
-procMessages h conState handler [""] = return ()
-procMessages h conState handler (msg:msgs) = do
-    newState <- handler h conState msg
-    procMessages h newState handler msgs
+procMessages :: Handle -> ConnectionState -> (Handle -> ConnectionState -> String -> IO ConnectionState) -> L.ByteString -> IO ()
+procMessages h conState handler content | L.null content = return ()
+                                        | otherwise = do
+    let (msg, msgs_with_pipe) = L.break (==0x7c) content
+    let msgs = L.tail msgs_with_pipe
+    newState <- handler h conState (C.unpack msg)
+    (newState2, msgs2) <- case newState of
+        ToClient nick (DownloadJob size downloadHandler) -> do
+                    putStrLn "Download File"
+                    let (file, new_msgs) = L.splitAt (fromInteger size) msgs
+                    downloadHandler file
+                    return ((ToClient nick Download), new_msgs)
+        _ -> return (newState, msgs)
+    procMessages h newState2 handler msgs2
 
-
--- | split messages from hub or peer
-splitMessages :: String -> [String]
-splitMessages stream = splitOn "|" stream
-    
 
 -- | extracts command from DC message
 getCmd :: String -> Maybe String

@@ -6,6 +6,7 @@ import Http
 import HttpHandler
 import DCCommon
 import DCToHub
+import DCToClient
 
 
 main = do
@@ -17,6 +18,7 @@ main = do
     hashFileList appState
     withMVar (appFileTree appState) (\tree -> putStrLn $ show tree)
     forkIO $ httpServer appState httpHandler
+    forkIO $ startDCServer (configMyIp config) (configMyPort config) (ToClient Nothing DontKnow) (startupClient appState) (handleClient appState)
     openDCConnection (configHubIp config) (configHubPort config) ToHub (startupHub appState) (handleHub appState)
 
 -- vim: sw=4 expandtab

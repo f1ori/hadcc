@@ -4,10 +4,12 @@ import System.Directory
 import System.FilePath
 import System.IO
 import Time
+import Data.Maybe
 import Control.Monad
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Codec.Compression.BZip as BZip
+import Text.XML.Light
 
 
 import FilelistTypes
@@ -15,7 +17,7 @@ import TTH
 import Config
 
 
-getFileList :: AppState -> FilePath -> IO Node
+getFileList :: AppState -> FilePath -> IO TreeNode
 getFileList appState dir = do
     names <- getUsefulContents dir
     let paths = map (dir </>) names
@@ -28,7 +30,7 @@ getFileList appState dir = do
     return (DirNode (last (splitDirectories dir)) dir nodes)
 
 
-getFile :: AppState -> FilePath -> IO Node
+getFile :: AppState -> FilePath -> IO TreeNode
 getFile appState path = do
     size <- getSystemFileSize path
     modTime <- toUTCTime `liftM` getModificationTime path
@@ -49,25 +51,20 @@ getUsefulContents path = do
     names <- getDirectoryContents path
     return (filter (`notElem` [".", ".."]) names)
 
-traverse :: (Node -> t) -> (Node -> t) -> Node -> [t]
-traverse startNode endNode node = case node of
-    DirNode _ _ children -> [startNode node] ++
-                            (concat (map (traverse startNode endNode) children) ) ++
-			    [endNode node]
-    FileNode _ _ _ _ _   -> [startNode node]
 
-treeSize :: Node -> Integer
-treeSize node = sum (traverse getSize (\n -> 0) node)
-    where
-        getSize (DirNode _ _ _) = 0
-        getSize (FileNode _ _ size _ _) = size
+-- | accumlulate filesizes of all files in tree
+treeSize :: TreeNode -> Integer
+treeSize (DirNode _ _ children)  = sum $ map treeSize children
+treeSize (FileNode _ _ size _ _) = size
+
 
 firstNotNothing :: [Maybe a] -> Maybe a
 firstNotNothing [] = Nothing
 firstNotNothing ((Just x):xs) = Just x
 firstNotNothing (Nothing:xs) = firstNotNothing xs
 
-searchFile :: String -> Node -> Maybe Node
+-- | search FileNode in TreeNode by path
+searchFile :: String -> TreeNode -> Maybe TreeNode
 searchFile path file@(FileNode name _ _ _ _)
         | path == name             = Just file
 	| otherwise                = Nothing
@@ -78,32 +75,47 @@ searchFile path (DirNode name _ children)
 	firstPath path = takeWhile (/='/') path
 	restPath path = tail $ dropWhile (/='/') path
 
-searchHash :: String -> Node -> Maybe Node
+-- | search hash in TreeNode
+searchHash :: String -> TreeNode -> Maybe TreeNode
 searchHash hash file@(FileNode _ _ _ _ (Just fhash))
         | fhash == hash                = Just file
 	| otherwise                    = Nothing
 searchHash hash (FileNode _ _ _ _ _)   = Nothing
 searchHash hash (DirNode _ _ children) = firstNotNothing $ map (searchHash hash) children
 
-getXmlList :: Node -> String
-getXmlList node = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" ++ 
-        "<FileListing Version=\"1\" Generator=\"hdc V:0.1\">" ++ 
-        (getXmlListRec node) ++ "</FileListing>"
+
+-- | convert TreeNode to xml
+treeNodeToXml :: TreeNode -> String
+treeNodeToXml node = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" ++ 
+                  "<FileListing Version=\"1\" Generator=\"hdc V:0.1\">" ++ 
+                  (toXml node) ++ "</FileListing>"
     where
-        getXmlListRec :: Node -> String
-        getXmlListRec node = concat (traverse startNode endNode node)
-	-- TODO: escape
-	startNode (DirNode name _ _) = "<Directory Name=\"" ++ name ++ "\">"
-	startNode (FileNode name _ size _ (Just hash)) = "<File Name=\"" ++ name ++ "\" Size=\"" ++ (show size) ++ "\" TTH=\"" ++ hash ++ "\"/>"
-	startNode (FileNode name _ size _ _) = "<File Name=\"" ++ name ++ "\" Size=\"" ++ (show size) ++ "\"/>"
-	endNode (DirNode name _ _) = "</Directory>"
-	endNode _ = ""
+        toXml (DirNode name _ children)            = "<Directory Name=\"" ++ (xmlQuote name) ++ "\">" ++
+	                                             (concat $ map toXml children) ++ "</Directory>"
+        toXml (FileNode name _ size _ (Just hash)) = "<File Name=\"" ++ (xmlQuote name) ++ "\" Size=\"" ++
+	                                             (show size) ++ "\" TTH=\"" ++ hash ++ "\"/>"
+        toXml (FileNode name _ size _ _)           = "<File Name=\"" ++ (xmlQuote name) ++ "\" Size=\"" ++
+	                                             (show size) ++ "\"/>"
+	xmlQuote [] = []
+	xmlQuote ('"':xs) = "&quot;" ++ (xmlQuote xs)
+	xmlQuote (x:xs) = x : (xmlQuote xs)
 
-getXmlBZList :: Node -> L.ByteString
-getXmlBZList node = (BZip.compress . C.pack . getXmlList) node
+-- | convert TreeNode to compressed xml
+treeNodeToXmlBz :: TreeNode -> L.ByteString
+treeNodeToXmlBz node = (BZip.compress . C.pack . treeNodeToXml) node
 
---main = getFileList "/mnt/music" >>= print
---main = do
---    list <- getFileList "/mnt/music"
---    print (treeSize list)
---    print (getXmlList list)
+
+xmlBzToTreeNode :: L.ByteString -> TreeNode
+xmlBzToTreeNode xmlbz = (xmlToTreeNode . BZip.decompress) xmlbz
+
+xmlToTreeNode :: L.ByteString -> TreeNode
+xmlToTreeNode xml = toNode (head $ tail $ onlyElems $ parseXML xml)
+    where
+        toNode (Element (QName "FileListing" _ _) _ content _) = DirNode "base" "" (map toNode (onlyElems content))
+        toNode (Element (QName "Directory" _ _) attr content _) = DirNode (getAttr "Name" attr) "" (map toNode (onlyElems content))
+        toNode (Element (QName "File" _ _) attr _ _) = FileNode (getAttr "Name" attr) "" (read $ getAttr "Size" attr)
+	                                                        someCalendarTime (Just $ getAttr "TTH" attr)
+        --toNode (Element (QName node _ _) _ _ _) = FileNode node "" 0 someCalendarTime Nothing
+	getAttr name attr = fromJust (lookupAttr (QName name Nothing Nothing) attr)
+	someCalendarTime = CalendarTime 1970 January 1 0 0 0 0 Sunday 0 "UTC" 0 False
+

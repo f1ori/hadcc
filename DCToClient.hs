@@ -2,10 +2,13 @@ module DCToClient where
 
 import System.IO
 import Control.Concurrent
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import qualified Data.Map as M
+import Data.List
 import Data.List.Split
 import Data.Char (toLower)
+import Control.Monad
 import Control.Concurrent.STM
 import Config
 import Filemgmt
@@ -21,8 +24,8 @@ nextToDownload :: AppState -> Nick -> IO (Maybe String)
 nextToDownload appState nick = do
     jobs <- atomically $ readTVar (appJobs appState)
     case M.lookup nick jobs of
-        Just (_, (x:xs)) -> return (Just x)
-        _                -> return Nothing
+        Just (x:xs) -> return (Just x)
+        _           -> return Nothing
 
 -- | connection startup handler, send nick
 startupClient :: AppState -> Handle -> IO ()
@@ -154,8 +157,8 @@ handleClient appState h conState msg = do
 	                               -- let fileOffset = read (msg_split !! 3)
 	                               let fileBufSize = read (msg_split !! 4)
                                        let (ToClient (Just nick) _) = conState
-                                       if filename == "files.xml.bz2"
-                                           then return (ToClient Nothing (DownloadJob fileBufSize filelistHandler))
+                                       if filename == dcFilelist
+                                           then return (ToClient Nothing (DownloadJob fileBufSize (filelistHandler nick)))
                                            else return (ToClient Nothing (DownloadJob fileBufSize downloadHandler))
         Nothing         -> do
 	                       putStrLn "No Command:"
@@ -169,22 +172,40 @@ handleClient appState h conState msg = do
         downloadHandler :: L.ByteString -> IO ()
         downloadHandler file = do
             L.writeFile "test.bla" file
-        filelistHandler :: L.ByteString -> IO ()
-        filelistHandler file = do
-            L.writeFile "test.bla" file
 
--- | asyncronous download start, should be called from different thread
+        filelistHandler :: Nick -> L.ByteString -> IO ()
+        filelistHandler nick file = do
+            atomically $ do
+                    jobs <- readTVar (appJobs appState)
+                    writeTVar (appJobs appState) (M.update (deleteCompletely dcFilelist) nick jobs)
+                    filelists <- readTVar (appFilelists appState)
+                    writeTVar (appFilelists appState) (M.insert nick (B.concat $ L.toChunks file) filelists)
+
+        deleteCompletely :: (Eq a) => a -> [a] -> Maybe [a]
+        deleteCompletely item list = case delete item list of
+                                      [] -> Nothing
+                                      l  -> Just l
+
+-- | synchronous download of filelist
+downloadFilelist :: AppState -> Nick -> IO B.ByteString
+downloadFilelist appState nick = do
+    downloadFile appState nick dcFilelist
+    atomically $ do
+        filelists <- readTVar (appFilelists appState)
+        when (M.notMember nick filelists) retry
+        let Just filelist = M.lookup nick filelists
+        writeTVar (appFilelists appState) (M.delete nick filelists)
+        return filelist
+
+-- | asynchronous download start, should be called from different thread
 downloadFile :: AppState -> Nick -> String -> IO ()
 downloadFile appState nick file = do
     putStrLn "insert download"
     putStrLn (nick ++ " " ++ (configMyIp $ appConfig appState) ++ ":" ++ (configMyPort $ appConfig appState))
-    atomically markFileAndNick
+    atomically $ do
+        jobs <- readTVar (appJobs appState)
+        writeTVar (appJobs appState) (M.insertWith' (++) nick [file] jobs)
     withMVar (appHubHandle appState) $ \hubHandle -> do
         sendCmd hubHandle "ConnectToMe" (nick ++ " " ++ (configMyIp $ appConfig appState) ++ ":" ++ (configMyPort $ appConfig appState))
-
-    where
-        markFileAndNick = do
-            jobs <- readTVar (appJobs appState)
-            writeTVar (appJobs appState) (M.insertWith (\(_,nl) (f,ol) -> (f, nl++ol)) nick (Nothing, [file]) jobs)
 
 -- vim: sw=4 expandtab

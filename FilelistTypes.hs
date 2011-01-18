@@ -3,10 +3,10 @@ module FilelistTypes where
 import System.FilePath
 import Time
 
-data Node = DirNode  {
+data TreeNode = DirNode  {
 	               dirNodeName     :: String
 	             , dirNodePath     :: FilePath
-                     , dirNodeChildren :: [Node]
+                     , dirNodeChildren :: [TreeNode]
                      }
           | FileNode {
 	               fileNodeName    :: String

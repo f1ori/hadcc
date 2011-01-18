@@ -7,8 +7,13 @@ import Network.HTTP.Headers
 import Control.Concurrent
 import Control.Monad (liftM)
 import Data.List
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
+import Text.XML.Light
 
 import Http
+import Filelist
+import FilelistTypes
 import DCToHub
 import DCToClient
 import Config
@@ -28,27 +33,109 @@ httpHandler appState addr url request = do
         "/index" -> return (mkResponse "text/plain" "index")
         "/nicklist" -> do
             nicklist <- getDojoNickList appState
-            return (mkResponse "text/json" nicklist)
+            return (mkResponse "text/json; charset=ISO-8859-1" nicklist)
         path | (take 10 path) == "/filelist/" -> do
-            filelist <- getDojoFileList appState (urlDecode (drop 10 path))
-            return (mkResponse "text/json" filelist)
+                    filelist <- getDojoFileList appState (urlDecode (drop 10 path))
+                    return (mkResponse "text/json" filelist)
+             | (take 10 path) == "/download/" -> do
+                    filelist <- getDojoFileList appState (urlDecode (drop 10 path))
+                    return (mkResponse "text/json" filelist)
         _ -> return (mkResponse "text/plain" "not found")
 
 getDojoFileList :: AppState -> Nick -> IO String
 getDojoFileList appState nick = do
-    downloadFile appState nick "files.xml.bz2"
-    return "OK"
+    filelist <- downloadFilelist appState nick
+    return (toDojoFileList3 $ xmlBzToTreeNode $ L.fromChunks [filelist])
 
 
+-- | get nicklist in dojo/json format
 getDojoNickList :: AppState -> IO String
-getDojoNickList appState = dojoNicklist `liftM` getNickList appState
+getDojoNickList appState = (dojoNicklist . sort) `liftM` getNickList appState
     where
-        dojoNicklist list = "{identifier:'name',label:'name',items:[\n" ++
-	                    intercalate "," (map (\n->"{name:'"++ (jsquote n)++"'}\n") list) ++
-			    "]}"
-        jsquote [] = []
-        jsquote ('\'':xs) = '\\' : '\'' : (jsquote xs)
-        jsquote ('\"':xs) = '\\' : '\"' : (jsquote xs)
-        jsquote ('\\':xs) = '\\' : '\\' : (jsquote xs)
-        jsquote (x:xs) = x : (jsquote xs)
+        dojoNicklist list = objToJson [("identifier", jsquote "name"), ("label", jsquote "name"),
+                                       ("items", listToJson ( map (\n -> objToJson [("name",jsquote n)]) list))]
 
+
+-- | convert directory node into dojo/json string
+toDojoFileList :: TreeNode -> String
+toDojoFileList node = objToJson [("identifier", jsquote "id"), ("label", jsquote "name"),
+                                 ("items", listToJson (nodeToJson "0" node))]
+    where
+        nodeToJson :: String -> TreeNode -> [String]
+        nodeToJson path (DirNode name _ children)            =
+                [objToJson [("id", jsquote path), ("name", jsquote name), ("type", jsquote "dir"),
+                            ("children", listToJson $ map (reference path) (childrenIterator children))] ] ++
+                (concat $ map (\(i, child) -> nodeToJson (getID path i) child) (childrenIterator children))
+
+        nodeToJson path (FileNode name _ size _ (Just hash)) =
+                [ objToJson [("id", jsquote path), ("name", jsquote name), ("type", jsquote "file"),
+                             ("size", (show size)), ("tth", jsquote hash)] ]
+
+        childrenIterator children = zip (iterate (+1) 0) children
+        reference path (id, child) = objToJson [("_reference", jsquote (getID path id))]
+        getID path id = path ++ "-" ++ (show id)
+
+-- | convert directory node into dojo/json string
+toDojoFileList2 :: TreeNode -> String
+toDojoFileList2 node = objToJson [("identifier", jsquote "id"), ("label", jsquote "name"),
+                                               ("items", listToJson [nodeToJson "0" node] )]
+    where
+        nodeToJson :: String -> TreeNode -> String
+        nodeToJson path (DirNode name _ children)            =
+                objToJson [("id", jsquote path), ("name", jsquote name), ("type", jsquote "dir"),
+                           ("children", listToJson (map (\(i, child) -> nodeToJson (getID path i) child) (childrenIterator children)))]
+
+
+        nodeToJson path (FileNode name _ size _ (Just hash)) =
+                objToJson [("id", jsquote path), ("name", jsquote name), ("type", jsquote "file"),
+                           ("size", (show size)), ("tth", jsquote hash)]
+
+        childrenIterator children = zip (iterate (+1) 0) children
+        getID path id = path ++ "-" ++ (show id)
+
+-- | convert directory node into dojo/json string
+toDojoFileList3 :: TreeNode -> String
+toDojoFileList3 node = objToJson [("identifier", jsquote "id"), ("label", jsquote "name"),
+                                               ("items", listToJson ((fst dirsAndFiles) ++ (snd dirsAndFiles)) )]
+    where
+        dirsAndFiles = nodeToJson "0" "" node
+
+        nodeToJson :: String -> String -> TreeNode -> ([String], [String])
+        nodeToJson path parent (FileNode name _ size _ (Just hash)) =
+                ([], [objToJson [("id", jsquote path), ("parent", jsquote parent), ("name", jsquote name), ("type", jsquote "file"),
+                           ("size", (show size)), ("tth", jsquote hash)] ] )
+
+        nodeToJson path parent (DirNode name _ children)            = 
+                ([objToJson [("id", jsquote path), ("name", jsquote name), ("type", jsquote "dir"),
+                           ("children", listToJson (concat $ map fst recursion))]],
+                 concat (map snd recursion)
+                )
+            where recursion = (map (\(i, child) -> nodeToJson (getID path i) path child) (childrenIterator children))
+
+
+
+        childrenIterator children = zip (iterate (+1) 0) children
+        getID path id = path ++ "-" ++ (show id)
+
+
+-- | quote string for javascript/json
+jsquote :: String -> String
+jsquote str = "'" ++ (quote str) ++ "'"
+    where
+        quote [] = []
+        quote ('\'':xs) = '\\' : '\'' : (quote xs)
+        quote ('\"':xs) = '\\' : '\"' : (quote xs)
+        quote ('\\':xs) = '\\' : '\\' : (quote xs)
+        quote (x:xs) = x : (quote xs)
+
+-- | convert haskell list to json list
+listToJson :: [String] -> String
+listToJson list = "[" ++ intercalate "," list ++ "]"
+
+-- | convert haskell lookup-list into json object (don't forget to quote the strings)
+objToJson :: [(String, String)] -> String
+objToJson list = "{" ++ intercalate "," (toJson list) ++ "}\n"
+    where
+        toJson [] = []
+        toJson ((x1, x2) : xs) = (x1 ++ ":" ++ x2) : (toJson xs)
+-- vim: ai sw=4 expandtab

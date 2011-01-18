@@ -2,6 +2,7 @@
 module Filemgmt (
       getFileSize
     , getFileContent
+    , dcFilelist
     ) where
 
 import System.IO
@@ -12,11 +13,13 @@ import FilelistTypes
 import Filelist
 import Config
 
+dcFilelist = "files.xml.bz2"
+
 getFileSize :: AppState -> String -> IO (Maybe Integer)
 getFileSize appState path = do
     fileTree <- readMVar $ appFileTree appState
     case path of
-        path | "files.xml.bz2" == path -> return $ Just (fromIntegral $ L.length (getXmlBZList fileTree))
+        path | dcFilelist == path -> return $ Just (fromIntegral $ L.length (treeNodeToXmlBz fileTree))
              | "TTH/" == (take 4 path) -> returnFileSize (searchHash (drop 4 path) fileTree)
              | otherwise               -> returnFileSize (searchFile path fileTree)
     where
@@ -30,7 +33,7 @@ getFileContent :: AppState -> String -> Integer -> IO (Maybe L.ByteString)
 getFileContent appState path offset = do
     fileTree <- readMVar $ appFileTree appState
     case path of
-        path | "files.xml.bz2" == path -> return $ Just (getXmlBZList fileTree)
+        path | dcFilelist == path -> return $ Just (treeNodeToXmlBz fileTree)
              | "TTH/" == (take 4 path) -> returnStream (searchHash (drop 4 path) fileTree)
              | otherwise               -> returnStream (searchFile path fileTree)
     where

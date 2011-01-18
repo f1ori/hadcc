@@ -49,7 +49,7 @@ hashFileList appState = do
     tree <- readMVar (appFileTree appState)
     traverse appState [] tree
     where
-        traverse :: AppState -> [String] -> Node -> IO ()
+        traverse :: AppState -> [String] -> TreeNode -> IO ()
         traverse appState dirs (DirNode name _ children) = mapM_ (traverse appState (name:dirs)) children
         --traverse appState dir@(DirNode _ _ children) = liftM (dir {dirNodeChildren=}) =<< return (mapM (traverse appState) children)
         traverse appState dirs (FileNode _ _ _ _ (Just hash)) = return ()
@@ -58,7 +58,7 @@ hashFileList appState = do
 	    setHashInCache appState path hash
 	    modifyMVar_ (appFileTree appState) (\n -> return $ setHash hash (reverse (name:dirs)) n)
 
-        setHash :: String -> [String] -> Node -> Node
+        setHash :: String -> [String] -> TreeNode -> TreeNode
         setHash hash [name] file@(FileNode fname _ _ _ _)
 	    | name == fname = file {fileNodeHash = Just hash}
 	    | otherwise     = file

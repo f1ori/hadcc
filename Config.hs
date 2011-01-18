@@ -33,9 +33,11 @@ data AppState = AppState {
     -- | the static configuration
       appConfig :: AppConfig
     -- | filetree
-    , appFileTree :: MVar Node
-    -- | jobs for the nicks, first in tuple is filelist, second is list of files to download
-    , appJobs :: TVar (M.Map Nick (Maybe B.ByteString, [String]))
+    , appFileTree :: MVar TreeNode
+    -- | jobs for the nicks, list of files to download
+    , appJobs :: TVar (M.Map Nick [String])
+    -- | filelists of nicks
+    , appFilelists :: TVar (M.Map Nick B.ByteString)
     -- | unused
     , appUploads :: MVar [String]
     -- | unused
@@ -75,6 +77,7 @@ newAppState :: AppConfig -> IO AppState
 newAppState appConfig = do
     fileTree <- newEmptyMVar
     jobs <- newTVarIO M.empty
+    filelists <- newTVarIO M.empty
     uploads <- newMVar []
     downloads <- newMVar []
     nicklist <- newEmptyMVar
@@ -84,6 +87,7 @@ newAppState appConfig = do
                      appConfig = appConfig
                    , appFileTree = fileTree
                    , appJobs = jobs
+                   , appFilelists = filelists
                    , appUploads = uploads
                    , appDownloads = downloads
                    , appHubHandle = hubHandle

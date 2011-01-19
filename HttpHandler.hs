@@ -11,6 +11,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Text.XML.Light
 import GHC.Exts
+import Text.Printf (printf)
 
 import Http
 import Filelist
@@ -70,7 +71,7 @@ toDojoFileList node = objToJson [("identifier", jsquote "id"), ("label", jsquote
 
         nodeToJson path (FileNode name _ size _ (Just hash)) =
                 [ objToJson [("id", jsquote path), ("name", jsquote name), ("type", jsquote "file"),
-                             ("size", (show size)), ("tth", jsquote hash)] ]
+                             ("size", (prettySize size)), ("tth", jsquote hash)] ]
 
         childrenIterator children = zip (iterate (+1) 0) children
         reference path (id, child) = objToJson [("_reference", jsquote (getID path id))]
@@ -89,7 +90,7 @@ toDojoFileList2 node = objToJson [("identifier", jsquote "id"), ("label", jsquot
 
         nodeToJson path (FileNode name _ size _ (Just hash)) =
                 objToJson [("id", jsquote path), ("name", jsquote name), ("type", jsquote "file"),
-                           ("size", (show size)), ("tth", jsquote hash)]
+                           ("size", (prettySize size)), ("tth", jsquote hash)]
 
         childrenIterator children = zip (iterate (+1) 0) children
         getID path id = path ++ "-" ++ (show id)
@@ -104,7 +105,7 @@ toDojoFileList3 node = objToJson [("identifier", jsquote "id"), ("label", jsquot
         nodeToJson :: String -> String -> TreeNode -> ([String], [String])
         nodeToJson path parent (FileNode name _ size _ (Just hash)) =
                 ([], [objToJson [("id", jsquote path), ("parent", jsquote parent), ("name", jsquote name), ("type", jsquote "file"),
-                           ("size", (show size)), ("tth", jsquote hash)] ] )
+                           ("size", (prettySize size)), ("tth", jsquote hash)] ] )
 
         nodeToJson path parent (DirNode name _ children)            = 
                 ([objToJson [("id", jsquote path), ("name", jsquote name), ("type", jsquote "dir"),
@@ -139,4 +140,9 @@ objToJson list = "{" ++ intercalate "," (toJson list) ++ "}\n"
     where
         toJson [] = []
         toJson ((x1, x2) : xs) = (x1 ++ ":" ++ x2) : (toJson xs)
+
+prettySize :: Integer -> String
+prettySize size | size < 1024 = printf "%d B" size
+                | size < 1024*1024 = printf "%.1f KiB" (((fromInteger size)/1024.0)::Double)
+                | otherwise = printf "%.1f GiB" (((fromInteger size)/1024.0/1024.0)::Double)
 -- vim: ai sw=4 expandtab

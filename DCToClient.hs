@@ -10,6 +10,7 @@ import Data.List.Split
 import Data.Char (toLower)
 import Control.Monad
 import Control.Concurrent.STM
+import System.Random (randomRIO)
 import Config
 import Filemgmt
 import Filelist
@@ -23,6 +24,7 @@ toLowerCase (x:xs) = (toLower x) : xs
 nextToDownload :: AppState -> Nick -> IO (Maybe String)
 nextToDownload appState nick = do
     jobs <- atomically $ readTVar (appJobs appState)
+    putStrLn (show jobs)
     case M.lookup nick jobs of
         Just (x:xs) -> return (Just x)
         _           -> return Nothing
@@ -69,7 +71,11 @@ handleClient appState h conState msg = do
         Just "$Direction"   -> do
 	                       putStrLn "Direction"
                                let direction = toLowerCase $ takeWhile (/=' ') $ tail $ dropWhile (/=' ') msg
+                               putStrLn (show direction)
                                let ToClient (Just nick) state = conState
+                               case state of
+                                   Download -> putStrLn "state download"
+                                   _        -> putStrLn "state upload"
                                case state of
                                    -- I don't like random number battles :)
                                    Download -> if direction /= "upload" then hClose h else return ()

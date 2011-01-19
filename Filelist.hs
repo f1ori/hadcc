@@ -119,3 +119,6 @@ xmlToTreeNode xml = toNode (head $ tail $ onlyElems $ parseXML xml)
 	getAttr name attr = fromJust (lookupAttr (QName name Nothing Nothing) attr)
 	someCalendarTime = CalendarTime 1970 January 1 0 0 0 0 Sunday 0 "UTC" 0 False
 
+nodeToName :: TreeNode -> String
+nodeToName (DirNode name _ _) = name
+nodeToName (FileNode name _ _ _ _) = name

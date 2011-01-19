@@ -10,6 +10,7 @@ import Data.List
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Text.XML.Light
+import GHC.Exts
 
 import Http
 import Filelist
@@ -114,7 +115,7 @@ toDojoFileList3 node = objToJson [("identifier", jsquote "id"), ("label", jsquot
 
 
 
-        childrenIterator children = zip (iterate (+1) 0) children
+        childrenIterator children = zip (iterate (+1) 0) (sortWith nodeToName children)
         getID path id = path ++ "-" ++ (show id)
 
 

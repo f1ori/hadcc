@@ -9,10 +9,10 @@ initTcpServer ip port = withSocketsDo $ do
     addrinfos <- getAddrInfo Nothing (Just ip) (Just port)
     let serveraddr = head addrinfos
     sock <- socket (addrFamily serveraddr) Stream defaultProtocol
-    --setSocketOption sock ReuseAddr 1
+    setSocketOption sock ReuseAddr 1
     bindSocket sock (addrAddress serveraddr)
-    -- accept maximal 5 connections
-    listen sock 5
+    -- accept maximal 8 connections
+    listen sock 8
     return sock
 
 

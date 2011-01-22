@@ -1,6 +1,8 @@
 module HttpHandler where
 
 import System.IO
+import System.Directory (doesFileExist)
+import System.FilePath (takeExtension)
 import Network.URI
 import Network.HTTP
 import Network.HTTP.Headers
@@ -42,7 +44,25 @@ httpHandler appState addr url request = do
              | (take 10 path) == "/download/" -> do
                     filelist <- getDojoFileList appState (urlDecode (drop 10 path))
                     return (mkResponse "text/json" filelist)
-        _ -> return (mkResponse "text/plain" "not found")
+             | otherwise                      -> fileHandler (urlDecode path)
+
+fileHandler :: String -> IO (Response String)
+fileHandler file = if isInfixOf ".." file
+                   then return (mkResponse "text/plain" "illegal character")
+                   else do
+                       exists <- doesFileExist ("ui/qooxdoo/hadcc/build" ++ file)
+                       if exists
+                           then fileResponse (toMIME (takeExtension file)) ("ui/qooxdoo/hadcc/build" ++ file)
+                           else return (Response (4,0,4) "Not Found" [] "")
+
+toMIME :: String -> String
+toMIME ".js"   = "text/javascript"
+toMIME ".html" = "text/html"
+toMIME ".css"  = "text/css"
+toMIME ".png"  = "image/png"
+toMIME ".gif"  = "image/gif"
+toMIME _       = "application/octet-stream"
+
 
 getDojoFileList :: AppState -> Nick -> IO String
 getDojoFileList appState nick = do
@@ -57,43 +77,6 @@ getDojoNickList appState = (dojoNicklist . sort) `liftM` getNickList appState
         dojoNicklist list = objToJson [("identifier", jsquote "name"), ("label", jsquote "name"),
                                        ("items", listToJson ( map (\n -> objToJson [("name",jsquote n)]) list))]
 
-
--- | convert directory node into dojo/json string
-toDojoFileList :: TreeNode -> String
-toDojoFileList node = objToJson [("identifier", jsquote "id"), ("label", jsquote "name"),
-                                 ("items", listToJson (nodeToJson "0" node))]
-    where
-        nodeToJson :: String -> TreeNode -> [String]
-        nodeToJson path (DirNode name _ children)            =
-                [objToJson [("id", jsquote path), ("name", jsquote name), ("type", jsquote "dir"),
-                            ("children", listToJson $ map (reference path) (childrenIterator children))] ] ++
-                (concat $ map (\(i, child) -> nodeToJson (getID path i) child) (childrenIterator children))
-
-        nodeToJson path (FileNode name _ size _ (Just hash)) =
-                [ objToJson [("id", jsquote path), ("name", jsquote name), ("type", jsquote "file"),
-                             ("size", (prettySize size)), ("tth", jsquote hash)] ]
-
-        childrenIterator children = zip (iterate (+1) 0) children
-        reference path (id, child) = objToJson [("_reference", jsquote (getID path id))]
-        getID path id = path ++ "-" ++ (show id)
-
--- | convert directory node into dojo/json string
-toDojoFileList2 :: TreeNode -> String
-toDojoFileList2 node = objToJson [("identifier", jsquote "id"), ("label", jsquote "name"),
-                                               ("items", listToJson [nodeToJson "0" node] )]
-    where
-        nodeToJson :: String -> TreeNode -> String
-        nodeToJson path (DirNode name _ children)            =
-                objToJson [("id", jsquote path), ("name", jsquote name), ("type", jsquote "dir"),
-                           ("children", listToJson (map (\(i, child) -> nodeToJson (getID path i) child) (childrenIterator children)))]
-
-
-        nodeToJson path (FileNode name _ size _ (Just hash)) =
-                objToJson [("id", jsquote path), ("name", jsquote name), ("type", jsquote "file"),
-                           ("size", (prettySize size)), ("tth", jsquote hash)]
-
-        childrenIterator children = zip (iterate (+1) 0) children
-        getID path id = path ++ "-" ++ (show id)
 
 -- | convert directory node into dojo/json string
 toDojoFileList3 :: TreeNode -> String

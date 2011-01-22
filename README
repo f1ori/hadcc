@@ -1,7 +1,11 @@
 How to run:
 
+wget http://download.dojotoolkit.org/release-1.5.0/dojo-release-1.5.0.tar.gz
+and unzip it into ui/js/
+
 rename and edit config file
 
+Start hadcc with:
 $ runhaskell Hadcc.hs
 
 

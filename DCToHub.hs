@@ -33,7 +33,8 @@ handleHub appState h conState msg = do
 			           hFlush hubHandle
 			       return conState
         Just "$MyINFO" -> do
-	                       putStrLn ("Nickname update " ++ ((splitOn " " msg) !! 2))
+	                       --putStrLn ("Nickname update " ++ ((splitOn " " msg) !! 2))
+	                       putStrLn ("Nickname update " ++ msg)
 			       return conState
         Just "$NickList" -> do
 	                       putStrLn ("Nicklist: " ++ msg)

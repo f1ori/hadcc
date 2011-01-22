@@ -175,17 +175,22 @@ handleClient appState h conState msg = do
 	                       putStrLn msg
 			       return conState
     where
-        downloadHandler :: L.ByteString -> IO ()
-        downloadHandler file = do
+        downloadHandler :: Handle -> L.ByteString -> IO Bool
+        downloadHandler handle file = do
             L.writeFile "test.bla" file
+            return True
 
-        filelistHandler :: Nick -> L.ByteString -> IO ()
-        filelistHandler nick file = do
+        filelistHandler :: Nick -> Handle -> L.ByteString -> IO Bool
+        filelistHandler nick handle file = do
             atomically $ do
                     jobs <- readTVar (appJobs appState)
                     writeTVar (appJobs appState) (M.update (deleteCompletely dcFilelist) nick jobs)
                     filelists <- readTVar (appFilelists appState)
-                    writeTVar (appFilelists appState) (M.insert nick (B.concat $ L.toChunks file) filelists)
+                    writeTVar (appFilelists appState) (M.insert nick (B.concat $! L.toChunks file) filelists)
+            --jobs <- atomically $ readTVar (appFilelists appState)
+            --putStrLn (show jobs)
+            putStrLn "download complete (handler)"
+            return True
 
         deleteCompletely :: (Eq a) => a -> [a] -> Maybe [a]
         deleteCompletely item list = case delete item list of
@@ -196,12 +201,13 @@ handleClient appState h conState msg = do
 downloadFilelist :: AppState -> Nick -> IO B.ByteString
 downloadFilelist appState nick = do
     downloadFile appState nick dcFilelist
-    atomically $ do
+    f<-atomically $ do
         filelists <- readTVar (appFilelists appState)
         when (M.notMember nick filelists) retry
         let Just filelist = M.lookup nick filelists
         writeTVar (appFilelists appState) (M.delete nick filelists)
         return filelist
+    return f
 
 -- | asynchronous download start, should be called from different thread
 downloadFile :: AppState -> Nick -> String -> IO ()

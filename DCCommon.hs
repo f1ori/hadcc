@@ -10,10 +10,14 @@ import Control.Exception (handle, AsyncException, finally)
 import Config
 import Tcp
 
-data State = DontKnow
-           | Upload String Integer
-           | Download
-           | DownloadJob Integer (L.ByteString -> IO ())
+data State = DontKnow              -- ^ Don't know, what to do with this connection, waiting for commands from peer
+           | Upload String Integer -- ^ Remember to Upload this file on next "Send" - command
+           | Download              -- ^ This connection is for downloading something from peer
+           | DownloadJob Integer (Handle -> L.ByteString -> IO Bool)  -- ^ initiate download in message handler
+                                                                      --   the Integer 
+                                                                      --   the function is the download handler,
+                                                                      --   the return value indicates, if the connection should
+                                                                      --   be closed after the download
 -- | connection state
 data ConnectionState = ToClient (Maybe Nick) State
                      | ToHub
@@ -66,14 +70,16 @@ procMessages h conState handler content | L.null content = return ()
     let (msg, msgs_with_pipe) = L.break (==0x7c) content
     let msgs = L.tail msgs_with_pipe
     newState <- handler h conState (C.unpack msg)
-    (newState2, msgs2) <- case newState of
+    (newState2, msgs2, finish) <- case newState of
         ToClient nick (DownloadJob size downloadHandler) -> do
                     putStrLn "Download File"
                     let (file, new_msgs) = L.splitAt (fromInteger size) msgs
-                    downloadHandler file
-                    return ((ToClient nick Download), new_msgs)
-        _ -> return (newState, msgs)
-    procMessages h newState2 handler msgs2
+                    finish <- downloadHandler h $! file
+                    return ((ToClient nick Download), new_msgs, finish)
+        _ -> return (newState, msgs, False)
+    if not finish
+         then procMessages h newState2 handler msgs2
+         else return ()
 
 
 -- | extracts command from DC message

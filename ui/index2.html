@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Hadcc</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.4.4/jquery.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.9/jquery-ui.min.js"></script>
+    <link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.9/themes/base/jquery-ui.css" type="text/css" />
+    <script>
+        $(function() {
+            $( "#tabs" ).tabs();
+        });
+	function openNick(nick) {
+	    $( "#tabs" ).tabs( "add", "/filelist.html/" + escape(nick), nick );
+	}
+    </script>
+    <style>
+        #tabs {
+	    font-size: 10px;
+	}
+        .dirs {
+	    width: 400px;
+	    overflow: scroll;
+	    float: left;
+	}
+    </style>
+  </head>
+  <body>
+    <h3>Hadcc</h3>
+    <div>
+      <div id="tabs">
+	<ul>
+		<li><a href="#tabs-1">Info</a></li>
+		<li><a href="#tabs-2">Info2</a></li>
+		<li><a href="/nicklist.html">Nicks</a></li>
+	</ul>
+	<div id="tabs-1">
+		<p>Proin elit arcu, rutrum commodo, vehicula tempus, commodo a, risus. Curabitur nec arcu. Donec sollicitudin mi sit amet mauris. Nam elementum quam ullamcorper ante. Etiam aliquet massa et lorem. Mauris dapibus lacus auctor risus. Aenean tempor ullamcorper leo. Vivamus sed magna quis ligula eleifend adipiscing. Duis orci. Aliquam sodales tortor vitae ipsum. Aliquam nulla. Duis aliquam molestie erat. Ut et mauris vel pede varius sollicitudin. Sed ut dolor nec orci tincidunt interdum. Phasellus ipsum. Nunc tristique tempus lectus.</p>
+	</div>
+      </div>
+    </div>
+    
+  </body>
+</html>

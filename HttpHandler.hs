@@ -11,7 +11,6 @@ import Control.Monad (liftM)
 import Data.List
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import Text.XML.Light
 import GHC.Exts
 import Text.Printf (printf)
 
@@ -21,6 +20,7 @@ import FilelistTypes
 import DCToHub
 import DCToClient
 import Config
+import HtmlTemplates
 
 mkResponse :: String -> String -> Response String
 mkResponse contenttype body = Response (2,0,0) "OK" [Header HdrContentType contenttype, Header HdrContentLength (show $ length body)] body
@@ -37,10 +37,10 @@ httpHandler appState addr url request = do
         "/index" -> return (mkResponse "text/plain" "index")
         "/nicklist" -> do
             nicklist <- getDojoNickList appState
-            return (mkResponse "text/json; charset=ISO-8859-1" nicklist)
+            return (mkResponse "application/json; charset=ISO-8859-1" nicklist)
         path | (take 10 path) == "/filelist/" -> do
                     filelist <- getDojoFileList appState (urlDecode (drop 10 path))
-                    return (mkResponse "text/json" filelist)
+                    return (mkResponse "application/json; charset=ISO-8859-1" filelist)
              | (take 10 path) == "/download/" -> do
                     filelist <- getDojoFileList appState (urlDecode (drop 10 path))
                     return (mkResponse "text/json" filelist)
@@ -50,9 +50,9 @@ fileHandler :: String -> IO (Response String)
 fileHandler file = if isInfixOf ".." file
                    then return (mkResponse "text/plain" "illegal character")
                    else do
-                       exists <- doesFileExist ("ui/qooxdoo/hadcc/build" ++ file)
+                       exists <- doesFileExist ("ui" ++ file)
                        if exists
-                           then fileResponse (toMIME (takeExtension file)) ("ui/qooxdoo/hadcc/build" ++ file)
+                           then fileResponse (toMIME (takeExtension file)) ("ui" ++ file)
                            else return (Response (4,0,4) "Not Found" [] "")
 
 toMIME :: String -> String
@@ -88,7 +88,7 @@ toDojoFileList3 node = objToJson [("identifier", jsquote "id"), ("label", jsquot
         nodeToJson :: String -> String -> TreeNode -> ([String], [String])
         nodeToJson path parent (FileNode name _ size _ (Just hash)) =
                 ([], [objToJson [("id", jsquote path), ("parent", jsquote parent), ("name", jsquote name), ("type", jsquote "file"),
-                           ("size", (prettySize size)), ("tth", jsquote hash)] ] )
+                           ("size", (jsquote $ prettySize size)), ("tth", jsquote hash)] ] )
 
         nodeToJson path parent (DirNode name _ children)            = 
                 ([objToJson [("id", jsquote path), ("name", jsquote name), ("type", jsquote "dir"),
@@ -101,6 +101,32 @@ toDojoFileList3 node = objToJson [("identifier", jsquote "id"), ("label", jsquot
 
         childrenIterator children = zip (iterate (+1) 0) (sortWith nodeToName children)
         getID path id = path ++ "-" ++ (show id)
+
+-- | convert directory node into html string
+toHtmlFileList :: TreeNode -> String
+toHtmlFileList node = "<div class='dirs'><ul>" ++ ((\(x,_,_)->x) dirsAndFiles) ++ "</ul></div>" ++
+                      ((\(_,x,_)->x) dirsAndFiles)
+    where
+        dirsAndFiles = nodeToHtml "0" node
+
+        nodeToHtml :: String -> TreeNode -> (String, String, String)
+        nodeToHtml path (FileNode name _ size _ (Just hash)) =
+                ("", "", row [htmlquote name, prettySize size, htmlquote hash] )
+
+        nodeToHtml path (DirNode name _ children)            = 
+                (printf "<li><span onclick=\"alert(%s);\">%s</span><br/><ul>%s</ul></li>"
+                        (jsquote path) (htmlquote name) (concat $ map (\(x,_,_)->x) recursion) ,
+                 ( concat $ map (\(_,x,_)->x) recursion )
+                     ++ (printf "<table class='files' id='%s'>%s</table>" path (concat $ map (\(_,_,x)->x) recursion) ) ,
+                 ""
+                )
+            where recursion = (map (\(i, child) -> nodeToHtml (getID path i) child) (childrenIterator children))
+
+
+        childrenIterator children = zip [0..] (sortWith nodeToName children)
+        getID path id = path ++ "-" ++ (show id)
+        row :: [String] -> String
+        row cells = printf "<tr>%s</tr>" ((concat $ map (\c -> printf "<td>%s</td>" (htmlquote c)) cells)::String)
 
 
 -- | quote string for javascript/json
@@ -127,5 +153,6 @@ objToJson list = "{" ++ intercalate "," (toJson list) ++ "}\n"
 prettySize :: Integer -> String
 prettySize size | size < 1024 = printf "%d B" size
                 | size < 1024*1024 = printf "%.1f KiB" (((fromInteger size)/1024.0)::Double)
-                | otherwise = printf "%.1f GiB" (((fromInteger size)/1024.0/1024.0)::Double)
+                | size < 1024*1024*1024 = printf "%.1f MiB" (((fromInteger size)/1024.0/1024.0)::Double)
+                | otherwise = printf "%.1f GiB" (((fromInteger size)/1024.0/1024.0/1024.0)::Double)
 -- vim: ai sw=4 expandtab

@@ -6,10 +6,10 @@ var newFilelistTab = function(e) {
     var filelistStore = new dojo.data.ItemFileReadStore({ url: '/filelist/'+escape(nick) });
 
     // set the layout structure:
-    /*var filelistLayout = [{
+    var filelistLayout = [{
         field: 'name',
         name: 'Name',
-        width: '200px'
+        width: '300px'
     },
     {
         field: 'size',
@@ -22,18 +22,18 @@ var newFilelistTab = function(e) {
         width: 'auto'
     }];
     var filelistGrid = new dojox.grid.DataGrid({
-        query: {'id': 'nix'},
+        query: { 'parent': '0'},
         store: filelistStore,
         clientSort: true,
         structure: filelistLayout,
         region: 'center',
         splitter: true,
-    });*/
+    });
 
     var filelistModel = new dijit.tree.TreeStoreModel({
         store: filelistStore,
         query: {id: '0'},
-        rootLabel: nick,
+        //rootLabel: nick,
         //childrenAttrs: ["children"]
     });
     var dirTree = new dijit.Tree ({
@@ -44,7 +44,7 @@ var newFilelistTab = function(e) {
         onClick: function(item) {
             var dir = filelistStore.getValue(item, 'id');
             console.log(dir);
-            filelistGrid.setQuery({parent: dir});
+            filelistGrid.setQuery({'parent': dir});
         },
     });
 
@@ -55,10 +55,10 @@ var newFilelistTab = function(e) {
                   //livesplitter: true,
     });
     borderContainer.addChild(dirTree);
-    //borderContainer.addChild(filelistGrid);
+    borderContainer.addChild(filelistGrid);
     tabContainer.addChild(borderContainer);
     tabContainer.selectChild(borderContainer);
-    //filelistGrid.startup();
+    filelistGrid.startup();
 }
 
 dojo.addOnLoad(function(){

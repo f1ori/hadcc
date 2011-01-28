@@ -9,6 +9,7 @@ import Foreign.Marshal.Error (void)
 import Control.Exception (handle, AsyncException, finally)
 import Config
 import Tcp
+import EventTypes
 
 data State = DontKnow              -- ^ Don't know, what to do with this connection, waiting for commands from peer
            | Upload String Integer -- ^ Remember to Upload this file on next "Send" - command

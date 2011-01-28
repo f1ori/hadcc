@@ -9,8 +9,7 @@ import Data.ConfigFile
 import Data.Either.Utils
 import FilelistTypes
 import TTHTypes
-
-type Nick = String
+import EventTypes
 
 -- | static application configuration
 data AppConfig = AppConfig {
@@ -48,6 +47,8 @@ data AppState = AppState {
     , appNickList :: MVar [Nick]
     -- | cache for hashes, see TTH.hs
     , appTTHCache :: MVar TTHCache
+    -- | list of events for http polling
+    , appEventList :: TVar EventList
     }
 
 -- | load config from file into config-object
@@ -83,6 +84,7 @@ newAppState appConfig = do
     nicklist <- newEmptyMVar
     hubHandle <- newEmptyMVar
     tthCache <- newEmptyMVar
+    eventList <- newEventList
     return AppState {
                      appConfig = appConfig
                    , appFileTree = fileTree
@@ -93,6 +95,7 @@ newAppState appConfig = do
                    , appHubHandle = hubHandle
                    , appNickList = nicklist
                    , appTTHCache = tthCache
+                   , appEventList = eventList
                    }
 
 

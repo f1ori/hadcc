@@ -17,6 +17,7 @@ import TTH
 import Config
 
 
+-- | create TreeNode tree from filesystem directory
 getFileList :: AppState -> FilePath -> IO TreeNode
 getFileList appState dir = do
     names <- getUsefulContents dir
@@ -29,7 +30,7 @@ getFileList appState dir = do
 	     )
     return (DirNode (last (splitDirectories dir)) dir nodes)
 
-
+-- | create TreeNode object for file in filesystem (hash is retreived from cache if available)
 getFile :: AppState -> FilePath -> IO TreeNode
 getFile appState path = do
     size <- getSystemFileSize path
@@ -38,6 +39,7 @@ getFile appState path = do
     return ( FileNode (takeFileName path) path size modTime hash )
 
 
+-- | get size of file from filesystem
 getSystemFileSize :: FilePath -> IO Integer
 getSystemFileSize path = do
     h <- openFile path ReadMode
@@ -45,7 +47,7 @@ getSystemFileSize path = do
     hClose h
     return size
 
-
+-- | get useful contents of a directory (not . or ..)
 getUsefulContents :: FilePath -> IO [String]
 getUsefulContents path = do
     names <- getDirectoryContents path
@@ -58,6 +60,7 @@ treeSize (DirNode _ _ children)  = sum $ map treeSize children
 treeSize (FileNode _ _ size _ _) = size
 
 
+-- | get return first value in list, which is not Nothing
 firstNotNothing :: [Maybe a] -> Maybe a
 firstNotNothing [] = Nothing
 firstNotNothing ((Just x):xs) = Just x
@@ -105,9 +108,11 @@ treeNodeToXmlBz :: TreeNode -> L.ByteString
 treeNodeToXmlBz node = (BZip.compress . C.pack . treeNodeToXml) node
 
 
+-- | convert compressed xml to TreeNode object (this is, what you normally need)
 xmlBzToTreeNode :: L.ByteString -> TreeNode
 xmlBzToTreeNode xmlbz = (xmlToTreeNode . BZip.decompress) xmlbz
 
+-- | convert plain xml to TreeNode object
 xmlToTreeNode :: L.ByteString -> TreeNode
 xmlToTreeNode xml = toNode (head $ tail $ onlyElems $ parseXML xml)
     where
@@ -119,6 +124,7 @@ xmlToTreeNode xml = toNode (head $ tail $ onlyElems $ parseXML xml)
 	getAttr name attr = fromJust (lookupAttr (QName name Nothing Nothing) attr)
 	someCalendarTime = CalendarTime 1970 January 1 0 0 0 0 Sunday 0 "UTC" 0 False
 
+-- | get name of TreeNode object (directory name or filename)
 nodeToName :: TreeNode -> String
 nodeToName (DirNode name _ _) = name
 nodeToName (FileNode name _ _ _ _) = name

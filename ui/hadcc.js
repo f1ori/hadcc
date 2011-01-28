@@ -61,10 +61,46 @@ var newFilelistTab = function(e) {
     filelistGrid.startup();
 }
 
+function eventHandler(lastId) {
+    dojo.xhrGet( {
+        url: "/events/"+lastId, 
+        handleAs: "json",
+
+        load: function(response, ioArgs) {
+            if (response == null)
+                return null;
+            for (var i = 0; i < response.events.length; i++) {
+                var e = response.events[i];
+                if(e.type == "chatmsg") {
+                    var lines = e.msg.split("\n");
+                    var pane = dojo.byId("chatPane");
+                    for (var j = 0; j < lines.length; j++) {
+                        var line = lines[j];
+                        pane.appendChild(document.createElement("div")).
+                            appendChild(document.createTextNode(line));
+                    }
+                    pane.scrollTop = pane.scrollHeight;
+                }
+            }
+            window.setTimeout("eventHandler("+response.newId+");", 500);
+            return response;
+        },
+
+        error: function(response, ioArgs) {
+            console.error("HTTP status code: ", ioArgs.xhr.status);
+            return response;
+        }
+    });
+}
+
 dojo.addOnLoad(function(){
     var nicklistGrid = dojo.byId("nicklistGrid");
     // doesn't work, why???
     //dojo.connect(nicklistGrid, "onRowDblClick", newFilelistTab);
+    dojo.byId("chatPane").
+    appendChild(document.createElement("div")).
+    appendChild(document.createTextNode("blabla"));
+    eventHandler(0);
 });
 
 // vim: sw=4 ai expandtab

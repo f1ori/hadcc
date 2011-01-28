@@ -6,6 +6,8 @@ import Data.List.Split
 
 import DCCommon
 import DCToClient
+import Event
+import EventTypes
 import Config
 
 startupHub :: AppState -> Handle -> IO ()
@@ -43,6 +45,7 @@ handleHub appState h conState msg = do
 			       return conState
         Just "$Chat" -> do
 	                       putStrLn ("Chat: " ++ msg)
+			       sendEvent appState (EChatMsg msg)
 			       return conState
         Just "$ConnectToMe" -> do
 	                       let hostport = last (splitOn " " msg)
@@ -55,6 +58,7 @@ handleHub appState h conState msg = do
         Nothing         -> do
 	                       putStrLn "No Command:"
 	                       putStrLn msg
+			       sendEvent appState (EChatMsg msg)
 			       return conState
         _               -> do
 	                       putStrLn "Unkown Command:"

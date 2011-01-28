@@ -15,19 +15,17 @@ import GHC.Exts
 import Text.Printf (printf)
 
 import Http
-import Filelist
 import FilelistTypes
+import Filelist
+import EventTypes
+import Event
 import DCToHub
 import DCToClient
 import Config
 import HtmlTemplates
+import Json
 
-mkResponse :: String -> String -> Response String
-mkResponse contenttype body = Response (2,0,0) "OK" [Header HdrContentType contenttype, Header HdrContentLength (show $ length body)] body
-
-fileResponse :: String -> FilePath -> IO (Response String)
-fileResponse contenttype path = mkResponse contenttype `liftM` readFile path
-
+-- | main handler for http request
 httpHandler :: Handler String
 httpHandler appState addr url request = do
     putStrLn (uriPath url)
@@ -43,18 +41,31 @@ httpHandler appState addr url request = do
                     return (mkResponse "application/json; charset=ISO-8859-1" filelist)
              | (take 10 path) == "/download/" -> do
                     filelist <- getDojoFileList appState (urlDecode (drop 10 path))
-                    return (mkResponse "text/json" filelist)
-             | otherwise                      -> fileHandler (urlDecode path)
+                    return (mkResponse "application/json" filelist)
+             | (take  8 path) == "/events/" -> do
+                    events <- getEvents appState (read (drop 8 path))
+                    return (mkResponse "application/json; charset=ISO-8859-1" events)
+             | otherwise                      -> fileHandler "ui" (urlDecode path)
 
-fileHandler :: String -> IO (Response String)
-fileHandler file = if isInfixOf ".." file
+-- | compose simple response object
+mkResponse :: String -> String -> Response String
+mkResponse contenttype body = Response (2,0,0) "OK" [Header HdrContentType contenttype, Header HdrContentLength (show $ length body)] body
+
+-- | compose response object from file
+fileResponse :: String -> FilePath -> IO (Response String)
+fileResponse contenttype path = mkResponse contenttype `liftM` readFile path
+
+-- | http handler for files
+fileHandler :: FilePath -> String -> IO (Response String)
+fileHandler path file = if isInfixOf ".." file
                    then return (mkResponse "text/plain" "illegal character")
                    else do
-                       exists <- doesFileExist ("ui" ++ file)
+                       exists <- doesFileExist (path ++ file)
                        if exists
-                           then fileResponse (toMIME (takeExtension file)) ("ui" ++ file)
+                           then fileResponse (toMIME (takeExtension file)) (path ++ file)
                            else return (Response (4,0,4) "Not Found" [] "")
 
+-- | git mime type from file extension
 toMIME :: String -> String
 toMIME ".js"   = "text/javascript"
 toMIME ".html" = "text/html"
@@ -64,10 +75,11 @@ toMIME ".gif"  = "image/gif"
 toMIME _       = "application/octet-stream"
 
 
+-- | get file list from peer in dojo/json format
 getDojoFileList :: AppState -> Nick -> IO String
 getDojoFileList appState nick = do
     filelist <- downloadFilelist appState nick
-    return (toDojoFileList3 $ xmlBzToTreeNode $ L.fromChunks [filelist])
+    return (toDojoFileList $ xmlBzToTreeNode $ L.fromChunks [filelist])
 
 
 -- | get nicklist in dojo/json format
@@ -79,8 +91,8 @@ getDojoNickList appState = (dojoNicklist . sort) `liftM` getNickList appState
 
 
 -- | convert directory node into dojo/json string
-toDojoFileList3 :: TreeNode -> String
-toDojoFileList3 node = objToJson [("identifier", jsquote "id"), ("label", jsquote "name"),
+toDojoFileList :: TreeNode -> String
+toDojoFileList node = objToJson [("identifier", jsquote "id"), ("label", jsquote "name"),
                                                ("items", listToJson ((fst dirsAndFiles) ++ (snd dirsAndFiles)) )]
     where
         dirsAndFiles = nodeToJson "0" "" node
@@ -128,28 +140,36 @@ toHtmlFileList node = "<div class='dirs'><ul>" ++ ((\(x,_,_)->x) dirsAndFiles) +
         row :: [String] -> String
         row cells = printf "<tr>%s</tr>" ((concat $ map (\c -> printf "<td>%s</td>" (htmlquote c)) cells)::String)
 
+-- | read events from application state and format them for dojo
+getEvents :: AppState -> Int -> IO String
+getEvents appState lastId = do
+    (newId, list) <- receiveEvents appState lastId
+    return (toDojoEventList newId list)
 
--- | quote string for javascript/json
-jsquote :: String -> String
-jsquote str = "'" ++ (quote str) ++ "'"
+-- | convert list of Events to json
+toDojoEventList :: Int -> [Event] -> String
+toDojoEventList newId events = objToJson [("newId", (show newId)), ("events", listToJson $ map eventToJson events)]
     where
-        quote [] = []
-        quote ('\'':xs) = '\\' : '\'' : (quote xs)
-        quote ('\"':xs) = '\\' : '\"' : (quote xs)
-        quote ('\\':xs) = '\\' : '\\' : (quote xs)
-        quote (x:xs) = x : (quote xs)
+        eventToJson (EChatMsg msg) = objToJson [("type", jsquote "chatmsg"), ("msg", jsquote msg)]
+        eventToJson (EDownloadStarted nick file) = objToJson [
+                                                          ("type", jsquote "downloadStarted"),
+                                                          ("nick", jsquote nick),
+                                                          ("file", jsquote file)]
+        eventToJson (EDownloadFinished nick file) = objToJson [
+                                                          ("type", jsquote "downloadFinished"),
+                                                          ("nick", jsquote nick),
+                                                          ("file", jsquote file)]
+        eventToJson (EUploadStarted nick file) = objToJson [
+                                                          ("type", jsquote "uploadStarted"),
+                                                          ("nick", jsquote nick),
+                                                          ("file", jsquote file)]
+        eventToJson (EUploadFinished nick file) = objToJson [
+                                                          ("type", jsquote "uploadFinished"),
+                                                          ("nick", jsquote nick),
+                                                          ("file", jsquote file)]
+        eventToJson _                               = objToJson [("type", jsquote "unknown")]
 
--- | convert haskell list to json list
-listToJson :: [String] -> String
-listToJson list = "[" ++ intercalate "," list ++ "]"
-
--- | convert haskell lookup-list into json object (don't forget to quote the strings)
-objToJson :: [(String, String)] -> String
-objToJson list = "{" ++ intercalate "," (toJson list) ++ "}\n"
-    where
-        toJson [] = []
-        toJson ((x1, x2) : xs) = (x1 ++ ":" ++ x2) : (toJson xs)
-
+-- | convert size in byte to string using readable units like Megabyte and Gigabyte
 prettySize :: Integer -> String
 prettySize size | size < 1024 = printf "%d B" size
                 | size < 1024*1024 = printf "%.1f KiB" (((fromInteger size)/1024.0)::Double)

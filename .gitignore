@@ -1,4 +1,9 @@
 dist/
+mnt/
 Hadcc.cfg
 Hadcc.cache
 ui/js
+*.hi
+*.o
+DCFs
+*.log

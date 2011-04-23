@@ -6,9 +6,10 @@ License:             GPL
 License-file:        LICENSE
 Author:              Florian Richter
 Maintainer:          Florian Richter <mail@f1ori.de>
-Build-Depends:       base,bzlib,TigerHash,haskell98,bytestring,filepath,directory,mtl,split,network,MissingH,ConfigFile,HTTP
+Build-Depends:       base,bzlib,stm,HFuse,TigerHash,haskell98,bytestring,filepath,directory,mtl,split,network,MissingH,ConfigFile,HTTP,containers,xml,random,unix,hslogger
 Build-Type:          Simple
 
 Executable:          hadcc
 Main-is:             Hadcc.hs
+Ghc-options:         -threaded
 

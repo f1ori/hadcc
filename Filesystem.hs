@@ -1,3 +1,5 @@
+module Filesystem where
+
 import System.Fuse
 import System.Posix.Types
 import System.Posix.Files
@@ -5,18 +7,13 @@ import System.Posix.User
 import System.Environment(withArgs)
 import System.Log.Logger
 import System.Log.Handler.Simple
+import qualified Data.ByteString.Char8 as B
 
 
-getInfo :: FilePath -> IO (Maybe (FileStat, [FilePath]))
-getInfo path = do
-    ugid <- getUserGroupID
-    case path of
-        "/" -> return $ Just (getStatDir ugid, ["nicks", "status"])
-        "/nicks" -> return $ Just (getStatDir ugid, [])
-        "/status" -> return $ Just (getStatFileR ugid 0, [])
-        _ -> return Nothing
+type FileInfoHandler = FilePath -> IO (Maybe (FileStat, [FilePath]))
 
 
+type FileHandle = ()
 type UserGroupID = (UserID, GroupID)
 
 getUserGroupID :: IO UserGroupID
@@ -33,7 +30,7 @@ getStat :: UserGroupID -> EntryType -> String -> FileOffset -> FileStat
 getStat (uid, gid) entryType fileModeStr size = FileStat
     { statEntryType = entryType
     , statFileMode = strToFileMode fileModeStr
-    , statLinkCount = 5
+    , statLinkCount = 1
     , statFileOwner = uid
     , statFileGroup = gid
     , statSpecialDeviceID = 0
@@ -59,21 +56,37 @@ fsDestroy :: IO ()
 fsDestroy = do
     errorM rootLoggerName "destroy"
 
+fsOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno FileHandle)
+fsOpen path mode flags = do
+    case mode of
+        ReadOnly -> return $ Right ()
+        _        -> return $ Left eACCES
 
-fsOpenDir :: FilePath -> IO Errno
-fsOpenDir path = do
+fsRead :: FilePath -> FileHandle -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
+fsRead path handle size offset = do
+    errorM rootLoggerName ("read " ++ path ++ " size:" ++(show size) ++ " offset: " ++(show offset))
+    errorM rootLoggerName $ show (B.take (fromIntegral size) $ B.drop (fromIntegral offset) (B.pack "alles ok"))
+    case path of
+        "/status" -> return $ Right (B.take (fromIntegral size) $ B.drop (fromIntegral offset) (B.pack "alles ok"))
+	_         -> return $ Left eINVAL
+
+fsRelease :: FilePath -> fh -> IO ()
+fsRelease path handle = return ()
+
+fsOpenDir :: FileInfoHandler -> FilePath -> IO Errno
+fsOpenDir infoHandler path = do
     errorM rootLoggerName ("opendir " ++ path)
-    result <- fsReadDir path
+    result <- fsReadDir infoHandler path
     case result of
         Right _ -> return eOK
         Left errno -> return errno
 
 
-fsReadDir :: FilePath -> IO (Either Errno [(FilePath, FileStat)])
-fsReadDir path = do
+fsReadDir :: FileInfoHandler -> FilePath -> IO (Either Errno [(FilePath, FileStat)])
+fsReadDir infoHandler path = do
     errorM rootLoggerName ("readdir " ++ path)
     ugid <- getUserGroupID
-    info <- getInfo path
+    info <- infoHandler path
     case info of
         Just (stat, content) -> do
             case statEntryType stat of
@@ -85,34 +98,39 @@ fsReadDir path = do
     where
         getStats path name = do
             let completepath = if (last path) == '/' then path ++ name else path ++ "/" ++ name
-            Just (stat, files) <- getInfo completepath
+            Just (stat, files) <- infoHandler completepath
             return stat
 
 
-fsReleaseDir :: FilePath -> IO Errno
-fsReleaseDir path = do
+fsReleaseDir :: FileInfoHandler -> FilePath -> IO Errno
+fsReleaseDir infoHandler path = do
     errorM rootLoggerName ("closedir " ++ path)
     return eOK
 
-fsGetStat :: FilePath -> IO (Either Errno FileStat)
-fsGetStat path = do
+fsGetStat :: FileInfoHandler -> FilePath -> IO (Either Errno FileStat)
+fsGetStat infoHandler path = do
     errorM rootLoggerName ("getstat " ++ path)
-    info <- getInfo path
+    info <- infoHandler path
     case info of
         Just (stat, content) -> return $ Right stat
 	Nothing              -> return $ Left eNOENT
 
-fuseOps = defaultFuseOps {
+fuseOps infoHandler = defaultFuseOps {
         fuseInit = fsInit,
         fuseDestroy = fsDestroy,
-        fuseOpenDirectory = fsOpenDir,
-        fuseReadDirectory = fsReadDir,
-        fuseReleaseDirectory = fsReleaseDir,
-	fuseGetFileStat = fsGetStat
+        fuseOpen = fsOpen,
+        fuseRead = fsRead,
+        fuseRelease = fsRelease,
+        fuseOpenDirectory = fsOpenDir infoHandler,
+        fuseReadDirectory = fsReadDir infoHandler,
+        fuseReleaseDirectory = fsReleaseDir infoHandler,
+	fuseGetFileStat = fsGetStat infoHandler
     }
 
-main = do
+-- | start fuse manager, puts program in background
+startupFileSystem :: FileInfoHandler -> IO ()
+startupFileSystem infoHandler = do
     h <- fileHandler "dc.log" DEBUG
     updateGlobalLogger rootLoggerName (addHandler h)
     errorM rootLoggerName "startup"
-    withArgs ["mnt"] $ fuseMain fuseOps defaultExceptionHandler
+    withArgs ["mnt"] $ fuseMain (fuseOps infoHandler) defaultExceptionHandler

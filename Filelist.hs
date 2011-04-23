@@ -2,8 +2,8 @@ module Filelist where
 
 import System.Directory
 import System.FilePath
+import System.Posix.Files
 import System.IO
-import Time
 import Data.Maybe
 import Control.Monad
 import qualified Data.ByteString.Lazy as L
@@ -33,8 +33,9 @@ getFileList appState dir = do
 -- | create TreeNode object for file in filesystem (hash is retreived from cache if available)
 getFile :: AppState -> FilePath -> IO TreeNode
 getFile appState path = do
-    size <- getSystemFileSize path
-    modTime <- toUTCTime `liftM` getModificationTime path
+    fileStatus <- getFileStatus path
+    let size = fromIntegral $ fileSize fileStatus
+    let modTime = modificationTime fileStatus
     hash <- getCachedHash appState path modTime
     return ( FileNode (takeFileName path) path size modTime hash )
 
@@ -119,10 +120,8 @@ xmlToTreeNode xml = toNode (head $ tail $ onlyElems $ parseXML xml)
         toNode (Element (QName "FileListing" _ _) _ content _) = DirNode "base" "" (map toNode (onlyElems content))
         toNode (Element (QName "Directory" _ _) attr content _) = DirNode (getAttr "Name" attr) "" (map toNode (onlyElems content))
         toNode (Element (QName "File" _ _) attr _ _) = FileNode (getAttr "Name" attr) "" (read $ getAttr "Size" attr)
-	                                                        someCalendarTime (Just $ getAttr "TTH" attr)
-        --toNode (Element (QName node _ _) _ _ _) = FileNode node "" 0 someCalendarTime Nothing
+	                                                        0 (Just $ getAttr "TTH" attr)
 	getAttr name attr = fromJust (lookupAttr (QName name Nothing Nothing) attr)
-	someCalendarTime = CalendarTime 1970 January 1 0 0 0 0 Sunday 0 "UTC" 0 False
 
 -- | get name of TreeNode object (directory name or filename)
 nodeToName :: TreeNode -> String

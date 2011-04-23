@@ -1,7 +1,7 @@
 module FilelistTypes where
 
+import System.Posix.Types
 import System.FilePath
-import Time
 
 data TreeNode = DirNode  {
 	               dirNodeName     :: String
@@ -12,7 +12,7 @@ data TreeNode = DirNode  {
 	               fileNodeName    :: String
 	             , fileNodePath    :: FilePath
 	             , fileNodeSize    :: Integer
-	             , fileNodeModTime :: CalendarTime
+	             , fileNodeModTime :: EpochTime
 	             , fileNodeHash    :: Maybe String
 	             }
 	    deriving (Eq, Show)

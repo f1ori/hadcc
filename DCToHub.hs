@@ -2,7 +2,10 @@ module DCToHub where
 
 import System.IO
 import Control.Concurrent
+import Control.Monad
+import Control.Exception.Base
 import Data.List.Split
+import qualified Data.Map as M
 
 import DCCommon
 import DCToClient
@@ -30,18 +33,27 @@ handleHub appState h conState msg = do
 	                       putStrLn "gogogo"
                                withMVar (appHubHandle appState) $ \hubHandle -> do
 	                           hPutStr hubHandle "$Version 1,0091|"
+	                           hPutStr hubHandle "$GetNickList|"
 			           -- http://www.teamfair.info/wiki/index.php?title=$MyINFO
 	                           hPutStr hubHandle (getMyINFOStr appState)
 			           hFlush hubHandle
 			       return conState
         Just "$MyINFO" -> do
-	                       --putStrLn ("Nickname update " ++ ((splitOn " " msg) !! 2))
 	                       putStrLn ("Nickname update " ++ msg)
+	                       let nick = (splitOn " " msg) !! 2
+			       modifyMVar_ (appNickList appState) (return . M.insert nick msg)
+			       return conState
+        Just "$Quit" -> do
+	                       putStrLn ("Nickname left " ++ msg)
+	                       let nick = (splitOn " " msg) !! 2
+			       modifyMVar_ (appNickList appState) (return . M.delete nick)
 			       return conState
         Just "$NickList" -> do
 	                       putStrLn ("Nicklist: " ++ msg)
                                let nicklist = filter (/="") (splitOn "$$" (tail $ dropWhile (/=' ') msg))
-                               putMVar (appNickList appState) nicklist
+			       let genGetINFOCmd nick = "$GetINFO " ++ nick ++ " " ++ (configNick $ appConfig appState) ++ "|"
+                               withMVar (appHubHandle appState) $ \hubHandle -> do
+			           hPutStr hubHandle $ concat $ map genGetINFOCmd nicklist
 			       return conState
         Just "$Chat" -> do
 	                       putStrLn ("Chat: " ++ msg)
@@ -65,11 +77,5 @@ handleHub appState h conState msg = do
 	                       putStrLn msg
 			       return conState
 
--- | synchronous fetch of nicklist (threadsafe)
-getNickList :: AppState -> IO [String]
-getNickList appState = do
-    withMVar (appHubHandle appState) $ \hubHandle -> do
-        hPutStr hubHandle "$GetNickList|"
-        hFlush hubHandle
-    nicklist <- takeMVar (appNickList appState)
-    return nicklist
+dibadu :: Nick -> String -> (M.Map Nick String) -> IO (M.Map Nick String)
+dibadu nick msg old = return $ M.insert nick msg old

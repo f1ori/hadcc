@@ -2,11 +2,13 @@ import Control.Concurrent
 import Config
 import Filelist
 import TTH
-import Http
-import HttpHandler
+--import Http
+--import HttpHandler
 import DCCommon
 import DCToHub
 import DCToClient
+import Filesystem
+import FilesystemHandler
 
 
 main = do
@@ -17,8 +19,9 @@ main = do
     withMVar (appFileTree appState) (\tree -> putStrLn $ treeNodeToXml tree)
     hashFileList appState
     withMVar (appFileTree appState) (\tree -> putStrLn $ treeNodeToXml tree)
-    forkIO $ httpServer appState httpHandler
+    -- forkIO $ httpServer appState httpHandler
     forkIO $ startDCServer (configMyIp config) (configMyPort config) (ToClient Nothing DontKnow) (startupClient appState) (handleClient appState)
-    openDCConnection (configHubIp config) (configHubPort config) ToHub (startupHub appState) (handleHub appState)
+    forkIO $ openDCConnection (configHubIp config) (configHubPort config) ToHub (startupHub appState) (handleHub appState)
+    startupFileSystem dcFileInfo
 
 -- vim: sw=4 expandtab

@@ -43,8 +43,8 @@ data AppState = AppState {
     , appDownloads :: MVar [String]
     -- | network handle for hub communication
     , appHubHandle :: MVar Handle
-    -- | nicklist on hub, for passing between threads
-    , appNickList :: MVar [Nick]
+    -- | current nicklist on hub
+    , appNickList :: MVar (M.Map Nick String)
     -- | cache for hashes, see TTH.hs
     , appTTHCache :: MVar TTHCache
     -- | list of events for http polling
@@ -81,7 +81,7 @@ newAppState appConfig = do
     filelists <- newTVarIO M.empty
     uploads <- newMVar []
     downloads <- newMVar []
-    nicklist <- newEmptyMVar
+    nicklist <- newMVar M.empty
     hubHandle <- newEmptyMVar
     tthCache <- newEmptyMVar
     eventList <- newEventList

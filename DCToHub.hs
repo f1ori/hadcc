@@ -3,14 +3,15 @@ module DCToHub where
 import System.IO
 import Control.Concurrent
 import Control.Monad
+import System.Log.Logger
 import Control.Exception.Base
 import Data.List.Split
 import qualified Data.Map as M
 
 import DCCommon
 import DCToClient
-import Event
-import EventTypes
+import FixedQueue
+import FixedQueueTypes
 import Config
 
 startupHub :: AppState -> Handle -> IO ()
@@ -20,7 +21,7 @@ handleHub :: AppState -> Handle -> ConnectionState -> String -> IO ConnectionSta
 handleHub appState h conState msg = do
     case getCmd msg of
         Just "$Lock"    -> do
-	                       putStrLn "Lock"
+	                       logMsg appState "Lock"
                                withMVar (appHubHandle appState) $ \hubHandle -> do
 	                           hPutStr hubHandle "$Key ........A .....0.0. 0. 0. 0. 0. 0.|"
 	                           hPutStr hubHandle ("$ValidateNick " ++ (configNick $ appConfig appState) ++ "|")
@@ -39,25 +40,29 @@ handleHub appState h conState msg = do
 			           hFlush hubHandle
 			       return conState
         Just "$MyINFO" -> do
-	                       putStrLn ("Nickname update " ++ msg)
+	                       logMsg appState ("Nickname update " ++ msg)
 	                       let nick = (splitOn " " msg) !! 2
-			       modifyMVar_ (appNickList appState) (return . M.insert nick msg)
+			       modifyMVar_ (appNickList appState) (return . M.insert (filesystemSafe nick) (nick, msg))
 			       return conState
         Just "$Quit" -> do
-	                       putStrLn ("Nickname left " ++ msg)
+	                       logMsg appState ("Nickname left " ++ msg)
 	                       let nick = (splitOn " " msg) !! 2
-			       modifyMVar_ (appNickList appState) (return . M.delete nick)
+			       modifyMVar_ (appNickList appState) (return . M.delete (filesystemSafe nick))
 			       return conState
         Just "$NickList" -> do
-	                       putStrLn ("Nicklist: " ++ msg)
-                               let nicklist = filter (/="") (splitOn "$$" (tail $ dropWhile (/=' ') msg))
+	                       logMsg appState ("Nicklist: " ++ msg)
+			       let mynick = (configNick $ appConfig appState)
+                               let nicklist = filter (/=mynick) $ filter (/="") (splitOn "$$" (tail $ dropWhile (/=' ') msg))
 			       let genGetINFOCmd nick = "$GetINFO " ++ nick ++ " " ++ (configNick $ appConfig appState) ++ "|"
+			       logMsg appState $ concat $ map genGetINFOCmd nicklist
                                withMVar (appHubHandle appState) $ \hubHandle -> do
 			           hPutStr hubHandle $ concat $ map genGetINFOCmd nicklist
+			           hFlush hubHandle
+			       logMsg appState "sent"
 			       return conState
         Just "$Chat" -> do
 	                       putStrLn ("Chat: " ++ msg)
-			       sendEvent appState (EChatMsg msg)
+			       --sendEvent appState (EChatMsg msg)
 			       return conState
         Just "$ConnectToMe" -> do
 	                       let hostport = last (splitOn " " msg)
@@ -70,12 +75,11 @@ handleHub appState h conState msg = do
         Nothing         -> do
 	                       putStrLn "No Command:"
 	                       putStrLn msg
-			       sendEvent appState (EChatMsg msg)
+	                       logMsg appState msg
+			       --sendEvent appState (EChatMsg msg)
 			       return conState
         _               -> do
-	                       putStrLn "Unkown Command:"
-	                       putStrLn msg
+	                       logMsg appState "Unkown Command:"
+	                       logMsg appState msg
 			       return conState
 
-dibadu :: Nick -> String -> (M.Map Nick String) -> IO (M.Map Nick String)
-dibadu nick msg old = return $ M.insert nick msg old

@@ -6,10 +6,13 @@ import Control.Concurrent.STM
 import qualified Data.ByteString as B
 import qualified Data.Map as M
 import Data.ConfigFile
+import Data.Char
 import Data.Either.Utils
 import FilelistTypes
 import TTHTypes
-import EventTypes
+import FixedQueueTypes
+
+type Nick = String
 
 -- | static application configuration
 data AppConfig = AppConfig {
@@ -43,12 +46,14 @@ data AppState = AppState {
     , appDownloads :: MVar [String]
     -- | network handle for hub communication
     , appHubHandle :: MVar Handle
-    -- | current nicklist on hub
-    , appNickList :: MVar (M.Map Nick String)
+    -- | current nicklist on hub (filesystemsafe -> original, info-string)
+    , appNickList :: MVar (M.Map Nick (Nick, String))
     -- | cache for hashes, see TTH.hs
     , appTTHCache :: MVar TTHCache
-    -- | list of events for http polling
-    , appEventList :: TVar EventList
+    -- | last chat msgs
+    , appChatMsgs :: FixedQueue String
+    -- | last chat msgs
+    , appLogHandle :: MVar Handle
     }
 
 -- | load config from file into config-object
@@ -84,7 +89,9 @@ newAppState appConfig = do
     nicklist <- newMVar M.empty
     hubHandle <- newEmptyMVar
     tthCache <- newEmptyMVar
-    eventList <- newEventList
+    chatMsgs <- newFixedQueue
+    handle <- openFile "dc.log" AppendMode
+    logHandle <- newMVar handle
     return AppState {
                      appConfig = appConfig
                    , appFileTree = fileTree
@@ -95,7 +102,8 @@ newAppState appConfig = do
                    , appHubHandle = hubHandle
                    , appNickList = nicklist
                    , appTTHCache = tthCache
-                   , appEventList = eventList
+                   , appChatMsgs = chatMsgs
+                   , appLogHandle = logHandle
                    }
 
 
@@ -108,3 +116,11 @@ getMyINFOStr appState = "$MyINFO $ALL " ++ nick ++ " " ++ desc ++ "<hdc V:0.1,M:
         desc = configDescription config
         email = configEMail config
         shareSize = configShareSize config
+
+filesystemSafe :: Nick -> Nick
+filesystemSafe nick = filter (\x -> isAlphaNum x || elem x ".:-_+" ) nick
+
+logMsg :: AppState -> String -> IO ()
+logMsg appState msg = withMVar (appLogHandle appState) $ \h -> do
+                       hPutStrLn h msg
+		       hFlush h

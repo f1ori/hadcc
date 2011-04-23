@@ -48,14 +48,6 @@ getStat (uid, gid) entryType fileModeStr size = FileStat
        chrToFileMode _   = nullFileMode
 
 
-fsInit :: IO ()
-fsInit = do
-    errorM rootLoggerName "init"
-
-fsDestroy :: IO ()
-fsDestroy = do
-    errorM rootLoggerName "destroy"
-
 fsOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno FileHandle)
 fsOpen path mode flags = do
     case mode of
@@ -64,8 +56,6 @@ fsOpen path mode flags = do
 
 fsRead :: FilePath -> FileHandle -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
 fsRead path handle size offset = do
-    errorM rootLoggerName ("read " ++ path ++ " size:" ++(show size) ++ " offset: " ++(show offset))
-    errorM rootLoggerName $ show (B.take (fromIntegral size) $ B.drop (fromIntegral offset) (B.pack "alles ok"))
     case path of
         "/status" -> return $ Right (B.take (fromIntegral size) $ B.drop (fromIntegral offset) (B.pack "alles ok"))
 	_         -> return $ Left eINVAL
@@ -75,7 +65,6 @@ fsRelease path handle = return ()
 
 fsOpenDir :: FileInfoHandler -> FilePath -> IO Errno
 fsOpenDir infoHandler path = do
-    errorM rootLoggerName ("opendir " ++ path)
     result <- fsReadDir infoHandler path
     case result of
         Right _ -> return eOK
@@ -84,7 +73,6 @@ fsOpenDir infoHandler path = do
 
 fsReadDir :: FileInfoHandler -> FilePath -> IO (Either Errno [(FilePath, FileStat)])
 fsReadDir infoHandler path = do
-    errorM rootLoggerName ("readdir " ++ path)
     ugid <- getUserGroupID
     info <- infoHandler path
     case info of
@@ -104,20 +92,18 @@ fsReadDir infoHandler path = do
 
 fsReleaseDir :: FileInfoHandler -> FilePath -> IO Errno
 fsReleaseDir infoHandler path = do
-    errorM rootLoggerName ("closedir " ++ path)
     return eOK
 
 fsGetStat :: FileInfoHandler -> FilePath -> IO (Either Errno FileStat)
 fsGetStat infoHandler path = do
-    errorM rootLoggerName ("getstat " ++ path)
     info <- infoHandler path
     case info of
         Just (stat, content) -> return $ Right stat
 	Nothing              -> return $ Left eNOENT
 
-fuseOps infoHandler = defaultFuseOps {
-        fuseInit = fsInit,
-        fuseDestroy = fsDestroy,
+fuseOps startHandler stopHandler infoHandler = defaultFuseOps {
+        fuseInit = startHandler,
+        fuseDestroy = stopHandler,
         fuseOpen = fsOpen,
         fuseRead = fsRead,
         fuseRelease = fsRelease,
@@ -128,9 +114,6 @@ fuseOps infoHandler = defaultFuseOps {
     }
 
 -- | start fuse manager, puts program in background
-startupFileSystem :: FileInfoHandler -> IO ()
-startupFileSystem infoHandler = do
-    h <- fileHandler "dc.log" DEBUG
-    updateGlobalLogger rootLoggerName (addHandler h)
-    errorM rootLoggerName "startup"
-    withArgs ["mnt"] $ fuseMain (fuseOps infoHandler) defaultExceptionHandler
+startupFileSystem :: IO () -> IO () -> FileInfoHandler -> IO ()
+startupFileSystem startHandler stopHandler infoHandler = do
+    withArgs ["mnt"] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler

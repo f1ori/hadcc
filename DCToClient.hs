@@ -15,8 +15,8 @@ import Config
 import Filemgmt
 import Filelist
 import DCCommon
-import EventTypes
-import Event
+import FixedQueueTypes
+import FixedQueue
 
 -- | convert string to lower case (didn't find a library function)
 toLowerCase :: String -> String
@@ -111,10 +111,8 @@ handleClient appState h conState msg = do
                                content <- getFileContent appState filename offset
                                case content of
                                    Just c -> do
-                                       sendEvent appState (EUploadStarted "TODO:nick" filename)
 	                               L.hPut h c
 			               hFlush h
-                                       sendEvent appState (EUploadFinished "TODO:nick" filename)
 			               return (ToClient Nothing DontKnow)
                                    Nothing -> do
                                        sendCmd h "Error" "File not found"
@@ -144,10 +142,8 @@ handleClient appState h conState msg = do
                                                putStrLn ("Filesize: " ++ (show n))
                                                sendCmd h "ADCSND" ("file " ++ filename ++ " 0 " ++ (show n))
                                                Just content <- getFileContent appState filename (read fileOffset)
-                                               sendEvent appState (EUploadStarted "TODO:nick" filename)
 	                                       L.hPut h content
 			                       hFlush h
-                                               sendEvent appState (EUploadFinished "TODO:nick" filename)
 			                       --hClose h
 			                       return (ToClient Nothing DontKnow)
                                            Nothing -> do
@@ -182,9 +178,7 @@ handleClient appState h conState msg = do
     where
         downloadHandler :: Handle -> L.ByteString -> IO Bool
         downloadHandler handle file = do
-            sendEvent appState (EDownloadStarted "TODO:nick" "TODO:filename")
             L.writeFile "test.bla" file
-            sendEvent appState (EDownloadFinished "TODO:nick" "TODO:filename")
             return True
 
         filelistHandler :: Nick -> Handle -> L.ByteString -> IO Bool

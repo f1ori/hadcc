@@ -34,7 +34,7 @@ data AppConfig = AppConfig {
 data AppState = AppState {
     -- | the static configuration
       appConfig :: AppConfig
-    -- | filetree
+    -- | own share
     , appFileTree :: MVar TreeNode
     -- | jobs for the nicks, list of files to download
     , appJobs :: TVar (M.Map Nick [String])

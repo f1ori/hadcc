@@ -13,11 +13,10 @@ import Control.Monad
 
 type FsObject = (FileStat, FsContent)
 data FsContent = FsDir [FilePath]
-               | FsFile OpenFunc ReadFunc CloseFunc
+               | FsFile (IO (ReadFunc, CloseFunc))
 
 type FileInfoHandler = FilePath -> IO (Maybe FsObject)
 
-type OpenFunc = IO ()
 type ReadFunc = Integer -> Integer -> IO B.ByteString
 type CloseFunc = IO ()
 
@@ -34,7 +33,7 @@ getStatDir ugid = getStat ugid Directory "rx" 0
 getStatFileR ugid size = getStat ugid RegularFile "r" size
 getStatFileRW ugid size = getStat ugid RegularFile "rw" size
 
-getStat :: UserGroupID -> EntryType -> String -> FileOffset -> FileStat
+getStat :: Integral n => UserGroupID -> EntryType -> String -> n -> FileStat
 getStat (uid, gid) entryType fileModeStr size = FileStat
     { statEntryType = entryType
     , statFileMode = strToFileMode fileModeStr
@@ -42,7 +41,7 @@ getStat (uid, gid) entryType fileModeStr size = FileStat
     , statFileOwner = uid
     , statFileGroup = gid
     , statSpecialDeviceID = 0
-    , statFileSize = size
+    , statFileSize = fromInteger (toInteger size)
     , statBlocks = 1
     , statAccessTime= 0
     , statModificationTime = 0
@@ -62,8 +61,8 @@ fsOpen infoHandler path mode flags = do
         ReadOnly -> do 
             object <- infoHandler path
 	    case object of
-	        Just (_, FsFile openFunc readFunc closeFunc)  -> do
-                          openFunc
+	        Just (_, FsFile openFunc)  -> do
+                          (readFunc, closeFunc) <- openFunc
                           return $ Right (readFunc, closeFunc)
 	        Just (_, FsDir _)  -> return $ Left eNOENT
                 Nothing            -> return $ Left eNOENT
@@ -93,7 +92,7 @@ fsReadDir infoHandler path = do
         Just (stat, FsDir list)   -> do
                       stats <- mapM (getStats path) list
                       return $ Right ([(".", getStatDir ugid), ("..", getStatDir ugid)] ++ (zip list stats))
-        Just (stat, FsFile _ _ _) ->
+        Just (stat, FsFile _) ->
                       return $ Left eNOTDIR
         Nothing                   ->
                       return $ Left eNOENT

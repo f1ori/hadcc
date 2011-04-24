@@ -25,7 +25,7 @@ main = do
     putMVar (appFileTree appState) =<< getFileList appState (configShareDir config)
     withMVar (appFileTree appState) (\tree -> putStrLn $ treeNodeToXml tree)
     hashFileList appState
-    withMVar (appFileTree appState) (\tree -> putStrLn $ treeNodeToXml tree)
+    withMVar (appFileTree appState) (\tree -> putStrLn $ show tree)
     startupFileSystem (start appState) (stop appState) (dcFileInfo appState)
 
 -- vim: sw=4 expandtab

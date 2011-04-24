@@ -69,15 +69,24 @@ firstNotNothing (Nothing:xs) = firstNotNothing xs
 
 -- | search FileNode in TreeNode by path
 searchFile :: String -> TreeNode -> Maybe TreeNode
-searchFile path file@(FileNode name _ _ _ _)
-        | path == name             = Just file
-	| otherwise                = Nothing
-searchFile path (DirNode name _ children)
-        | (firstPath path) == name = firstNotNothing $ map (searchFile (restPath path)) children
-	| otherwise                = Nothing
+searchFile path tree =
+    case searchNode path tree of
+        Just (file@(FileNode _ _ _ _ _)) -> Just file
+	_                                -> Nothing
+
+-- | search Node in TreeNode by path
+searchNode :: String -> TreeNode -> Maybe TreeNode
+searchNode path file@(FileNode name _ _ _ _)
+        | path == name               = Just file
+	| otherwise                  = Nothing
+searchNode path dir@(DirNode name _ children)
+        | path == name               = Just dir
+        | (firstPath path) == name   = firstNotNothing $ map (searchNode (restPath path)) children
+	| otherwise                  = Nothing
     where
 	firstPath path = takeWhile (/='/') path
-	restPath path = tail $ dropWhile (/='/') path
+	restPath (x:xs) | x=='/'    = xs
+	                | otherwise = restPath xs
 
 -- | search hash in TreeNode
 searchHash :: String -> TreeNode -> Maybe TreeNode

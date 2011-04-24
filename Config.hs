@@ -11,6 +11,7 @@ import Data.Either.Utils
 import FilelistTypes
 import TTHTypes
 import FixedQueueTypes
+import FilelistCacheTypes
 
 type Nick = String
 
@@ -54,6 +55,8 @@ data AppState = AppState {
     , appChatMsgs :: FixedQueue String
     -- | last chat msgs
     , appLogHandle :: MVar Handle
+    -- | cache filelists for filesystem
+    , appFilelistCache :: FilelistCache
     }
 
 -- | load config from file into config-object
@@ -92,6 +95,7 @@ newAppState appConfig = do
     chatMsgs <- newFixedQueue
     handle <- openFile "dc.log" AppendMode
     logHandle <- newMVar handle
+    filelistCache <- newFilelistCache
     return AppState {
                      appConfig = appConfig
                    , appFileTree = fileTree
@@ -104,6 +108,7 @@ newAppState appConfig = do
                    , appTTHCache = tthCache
                    , appChatMsgs = chatMsgs
                    , appLogHandle = logHandle
+                   , appFilelistCache = filelistCache
                    }
 
 

@@ -188,8 +188,9 @@ handleClient appState h conState msg = do
                     writeTVar (appJobs appState) (M.update (deleteCompletely dcFilelist) nick jobs)
                     filelists <- readTVar (appFilelists appState)
                     writeTVar (appFilelists appState) (M.insert nick (B.concat $! L.toChunks file) filelists)
-            --jobs <- atomically $ readTVar (appFilelists appState)
-            --putStrLn (show jobs)
+            -- wtf, why does $! not work?
+            filelists <- atomically $ readTVar (appFilelists appState)
+            putStrLn (show filelists)
             putStrLn "download complete (handler)"
             return True
 

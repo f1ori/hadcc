@@ -12,8 +12,8 @@ import FilesystemHandler
 
 start appState = do
     let config = appConfig appState
-    forkOS $ startDCServer (configMyIp config) (configMyPort config) (ToClient Nothing DontKnow) (startupClient appState) (handleClient appState)
-    forkOS $ openDCConnection (configHubIp config) (configHubPort config) ToHub (startupHub appState) (handleHub appState)
+    forkIO $ startDCServer (configMyIp config) (configMyPort config) (ToClient Nothing DontKnow) (startupClient appState) (handleClient appState)
+    forkIO $ openDCConnection (configHubIp config) (configHubPort config) ToHub (startupHub appState) (handleHub appState)
     return ()
     
 stop appState = return ()

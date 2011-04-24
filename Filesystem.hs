@@ -129,6 +129,6 @@ fuseOps startHandler stopHandler infoHandler = defaultFuseOps {
 -- | start fuse manager, puts program in background
 startupFileSystem :: IO () -> IO () -> FileInfoHandler -> IO ()
 startupFileSystem startHandler stopHandler infoHandler = do
-    withArgs ["mnt"] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler
+    withArgs ["mnt", "-f"] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler
 
 -- vim: sw=4 expandtab

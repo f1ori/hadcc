@@ -40,13 +40,13 @@ handleHub appState h conState msg = do
 			           hFlush hubHandle
 			       return conState
         Just "$MyINFO" -> do
-	                       logMsg appState ("Nickname update " ++ msg)
+	                       putStrLn ("Nickname update " ++ msg)
 	                       let nick = (splitOn " " msg) !! 2
 	                       let info = drop 13 msg
 			       modifyMVar_ (appNickList appState) (return . M.insert (filesystemSafe nick) (nick, info))
 			       return conState
         Just "$Quit" -> do
-	                       logMsg appState ("Nickname left " ++ msg)
+	                       putStrLn ("Nickname left " ++ msg)
 	                       let nick = (splitOn " " msg) !! 2
 			       modifyMVar_ (appNickList appState) (return . M.delete (filesystemSafe nick))
 			       return conState

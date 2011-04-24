@@ -183,14 +183,15 @@ handleClient appState h conState msg = do
 
         filelistHandler :: Nick -> Handle -> L.ByteString -> IO Bool
         filelistHandler nick handle file = do
-            atomically $ do
+            let fileNonLazy = B.concat $ L.toChunks file
+            fileNonLazy `seq` atomically $ do
                     jobs <- readTVar (appJobs appState)
                     writeTVar (appJobs appState) (M.update (deleteCompletely dcFilelist) nick jobs)
                     filelists <- readTVar (appFilelists appState)
-                    writeTVar (appFilelists appState) (M.insert nick (B.concat $! L.toChunks file) filelists)
+                    writeTVar (appFilelists appState) (M.insert nick fileNonLazy filelists)
             -- wtf, why does $! not work?
-            filelists <- atomically $ readTVar (appFilelists appState)
-            putStrLn (show filelists)
+            --filelists <- atomically $ readTVar (appFilelists appState)
+            --putStrLn (show filelists)
             putStrLn "download complete (handler)"
             return True
 

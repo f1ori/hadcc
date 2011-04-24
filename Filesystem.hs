@@ -8,12 +8,20 @@ import System.Environment(withArgs)
 import System.Log.Logger
 import System.Log.Handler.Simple
 import qualified Data.ByteString.Char8 as B
+import Control.Monad
 
 
-type FileInfoHandler = FilePath -> IO (Maybe (FileStat, [FilePath]))
+type FsObject = (FileStat, FsContent)
+data FsContent = FsDir [FilePath]
+               | FsFile OpenFunc ReadFunc CloseFunc
 
+type FileInfoHandler = FilePath -> IO (Maybe FsObject)
 
-type FileHandle = ()
+type OpenFunc = IO ()
+type ReadFunc = Integer -> Integer -> IO B.ByteString
+type CloseFunc = IO ()
+
+type FileHandle = (ReadFunc, CloseFunc)
 type UserGroupID = (UserID, GroupID)
 
 getUserGroupID :: IO UserGroupID
@@ -48,20 +56,26 @@ getStat (uid, gid) entryType fileModeStr size = FileStat
        chrToFileMode _   = nullFileMode
 
 
-fsOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno FileHandle)
-fsOpen path mode flags = do
+fsOpen :: FileInfoHandler -> FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno FileHandle)
+fsOpen infoHandler path mode flags = do
     case mode of
-        ReadOnly -> return $ Right ()
-        _        -> return $ Left eACCES
+        ReadOnly -> do 
+            object <- infoHandler path
+	    case object of
+	        Just (_, FsFile openFunc readFunc closeFunc)  -> do
+                          openFunc
+                          return $ Right (readFunc, closeFunc)
+	        Just (_, FsDir _)  -> return $ Left eNOENT
+                Nothing            -> return $ Left eNOENT
+
+	_ -> return $ Left eACCES
 
 fsRead :: FilePath -> FileHandle -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
-fsRead path handle size offset = do
-    case path of
-        "/status" -> return $ Right (B.take (fromIntegral size) $ B.drop (fromIntegral offset) (B.pack "alles ok"))
-	_         -> return $ Left eINVAL
+fsRead path (readFunc, _) size offset = Right `liftM` readFunc (fromIntegral size) (fromIntegral offset)
+        --"/status" -> return $ Right (B.take (fromIntegral size) $ B.drop (fromIntegral offset) (B.pack "alles ok"))
 
-fsRelease :: FilePath -> fh -> IO ()
-fsRelease path handle = return ()
+fsRelease :: FilePath -> FileHandle -> IO ()
+fsRelease path (_, closeFunc) = closeFunc
 
 fsOpenDir :: FileInfoHandler -> FilePath -> IO Errno
 fsOpenDir infoHandler path = do
@@ -76,17 +90,17 @@ fsReadDir infoHandler path = do
     ugid <- getUserGroupID
     info <- infoHandler path
     case info of
-        Just (stat, content) -> do
-            case statEntryType stat of
-                Directory -> do
-                               stats <- mapM (getStats path) content
-                               return $ Right ([(".", getStatDir ugid), ("..", getStatDir ugid)] ++ (zip content stats))
-                _         -> return $ Left eNOTDIR
-        Nothing -> return $ Left eNOENT
+        Just (stat, FsDir list)   -> do
+                      stats <- mapM (getStats path) list
+                      return $ Right ([(".", getStatDir ugid), ("..", getStatDir ugid)] ++ (zip list stats))
+        Just (stat, FsFile _ _ _) ->
+                      return $ Left eNOTDIR
+        Nothing                   ->
+                      return $ Left eNOENT
     where
         getStats path name = do
             let completepath = if (last path) == '/' then path ++ name else path ++ "/" ++ name
-            Just (stat, files) <- infoHandler completepath
+            Just (stat, _) <- infoHandler completepath
             return stat
 
 
@@ -98,13 +112,13 @@ fsGetStat :: FileInfoHandler -> FilePath -> IO (Either Errno FileStat)
 fsGetStat infoHandler path = do
     info <- infoHandler path
     case info of
-        Just (stat, content) -> return $ Right stat
-	Nothing              -> return $ Left eNOENT
+        Just (stat, _) -> return $ Right stat
+	Nothing        -> return $ Left eNOENT
 
 fuseOps startHandler stopHandler infoHandler = defaultFuseOps {
         fuseInit = startHandler,
         fuseDestroy = stopHandler,
-        fuseOpen = fsOpen,
+        fuseOpen = fsOpen infoHandler,
         fuseRead = fsRead,
         fuseRelease = fsRelease,
         fuseOpenDirectory = fsOpenDir infoHandler,
@@ -117,3 +131,5 @@ fuseOps startHandler stopHandler infoHandler = defaultFuseOps {
 startupFileSystem :: IO () -> IO () -> FileInfoHandler -> IO ()
 startupFileSystem startHandler stopHandler infoHandler = do
     withArgs ["mnt"] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler
+
+-- vim: sw=4 expandtab

@@ -31,14 +31,18 @@ handleHub appState h conState msg = do
 	                       putStrLn ("Hubname " ++ msg)
 			       return conState
         Just "$Hello"   -> do
-	                       putStrLn "gogogo"
-                               withMVar (appHubHandle appState) $ \hubHandle -> do
-	                           hPutStr hubHandle "$Version 1,0091|"
-	                           hPutStr hubHandle "$GetNickList|"
-			           -- http://www.teamfair.info/wiki/index.php?title=$MyINFO
-	                           hPutStr hubHandle (getMyINFOStr appState)
-			           hFlush hubHandle
-			       return conState
+	                       let hellonick = (splitOn " " msg) !! 1
+			       let mynick = (configNick $ appConfig appState)
+			       if hellonick == mynick
+                                   then do
+                                       withMVar (appHubHandle appState) $ \hubHandle -> do
+                                           hPutStr hubHandle "$Version 1,0091|"
+                                           hPutStr hubHandle "$GetNickList|"
+                                           -- http://www.teamfair.info/wiki/index.php?title=$MyINFO
+                                           hPutStr hubHandle (getMyINFOStr appState)
+                                           hFlush hubHandle
+                                       return conState
+                                   else return conState
         Just "$MyINFO" -> do
 	                       putStrLn ("Nickname update " ++ msg)
 	                       let nick = (splitOn " " msg) !! 2
@@ -47,7 +51,7 @@ handleHub appState h conState msg = do
 			       return conState
         Just "$Quit" -> do
 	                       putStrLn ("Nickname left " ++ msg)
-	                       let nick = (splitOn " " msg) !! 2
+	                       let nick = (splitOn " " msg) !! 1
 			       modifyMVar_ (appNickList appState) (return . M.delete (filesystemSafe nick))
 			       return conState
         Just "$NickList" -> do
@@ -84,3 +88,4 @@ handleHub appState h conState msg = do
 	                       logMsg appState msg
 			       return conState
 
+-- vim: sw=4 expandtab

@@ -4,6 +4,7 @@ import System.IO
 import Control.Concurrent
 import Control.Concurrent.STM
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import qualified Data.Map as M
 import Data.ConfigFile
 import Data.Char
@@ -14,6 +15,10 @@ import FixedQueueTypes
 import FilelistCacheTypes
 
 type Nick = String
+
+type DownloadHandler = Handle -> L.ByteString -> IO Bool
+-- | a download job, with filename and download handler
+data DcJob = Job String DownloadHandler
 
 -- | static application configuration
 data AppConfig = AppConfig {
@@ -37,9 +42,9 @@ data AppState = AppState {
       appConfig :: AppConfig
     -- | own share
     , appFileTree :: MVar TreeNode
-    -- | jobs for the nicks, list of files to download
-    , appJobs :: TVar (M.Map Nick [String])
-    -- | filelists of nicks
+    -- | job for the nicks, a file to download
+    , appJobs :: TVar (M.Map Nick DcJob)
+    -- | filelists of nicks to transfer it to other function/thread (TODO remove)
     , appFilelists :: TVar (M.Map Nick B.ByteString)
     -- | unused
     , appUploads :: MVar [String]

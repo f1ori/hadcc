@@ -1,20 +1,53 @@
 module FilesystemHandler where
 
 import System.IO
+import System.Timeout
 import Control.Concurrent.MVar
 import Control.Monad
 import System.Log.Logger
 import qualified Data.Map as M
 import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy as L
+import Data.Tuple
 
 import Config
 import Filesystem
 import FilelistTypes
 import Filelist
 import FilelistCache
+import DCToClient
 
-shareContentHandler :: Nick -> TreeNode -> FsContent
-shareContentHandler nick (FileNode _ path _ _ _) = FsDir []
+peer_timeout = 2000000
+
+shareContentHandler :: AppState -> Nick -> TreeNode -> FsContent
+shareContentHandler appState nick (FileNode _ _ _ _ (Just hash)) = FsFile openF
+    where
+        openF = do
+            finishedMVar <- newEmptyMVar
+            contentMVar <- newEmptyMVar
+            downloadFile appState (downloadHandler finishedMVar contentMVar) nick ("TTH/" ++ hash)
+            result <- timeout peer_timeout $ readMVar contentMVar 
+            case result of
+                Just _ -> return (readF contentMVar, closeF finishedMVar)
+                Nothing -> error "peer does not connect"
+
+        readF :: MVar L.ByteString -> ReadFunc
+        readF contentMVAr size offset = do
+            lazyResult <- modifyMVar contentMVAr (return . swap . L.splitAt (fromInteger size))
+            return (B.concat $ L.toChunks lazyResult)
+
+        closeF finishedMVar = takeMVar finishedMVar
+
+        downloadHandler finishedMVar contentMVar handle content = do
+            putStrLn "download handler active"
+            putMVar finishedMVar ()
+            putMVar contentMVar content
+            -- wait for finished MVar to be empty
+            putMVar finishedMVar ()
+            -- prevent further reads
+            void $ takeMVar contentMVar
+            return True
+
 
 -- | file content handler, providing data from local share
 myshareContentHandler :: TreeNode -> FsContent
@@ -76,7 +109,7 @@ dcFileInfo appState path = do
                                                               let Just (completeNick, _) = M.lookup nick nicklist
                                                               let sharepath = drop 6 subpath
                                                               share <- getFilelistCached appState completeNick
-                                                              treeNodeFsHandler (shareContentHandler completeNick) share ugid sharepath
+                                                              treeNodeFsHandler (shareContentHandler appState completeNick) share ugid sharepath
                             | otherwise                    -> return Nothing
 		      
 		  else return Nothing

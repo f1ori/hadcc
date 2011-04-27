@@ -1,3 +1,10 @@
+--- |
+--- | tiger hash calcuation and caching stuff
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
 module TTH 
     (
       getHashForFile
@@ -75,3 +82,5 @@ getHashForFile path = do
 
 -- test with runhaskell tth.hs tth file.ext
 --main = liftM (!!1) getArgs >>= getHashForFile >>= putStrLn
+
+-- vim: sw=4 expandtab

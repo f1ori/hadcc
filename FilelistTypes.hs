@@ -1,3 +1,11 @@
+--- |
+--- | This module contains type definitions for Filelist.hs to prevent circular imports
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
+
 module FilelistTypes where
 
 import System.Posix.Types
@@ -17,3 +25,4 @@ data TreeNode = DirNode  {
 	             }
 	    deriving (Eq, Show)
 
+-- vim: sw=4 expandtab

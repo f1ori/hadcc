@@ -1,3 +1,11 @@
+--- |
+--- | This module contains type definitions for FilelistCache.hs
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
+
 module FilelistCacheTypes where
 
 import Control.Concurrent.STM
@@ -10,3 +18,5 @@ data FilelistCacheEntry = FlCETreeNode TreeNode
 type FilelistCache = TVar (M.Map String FilelistCacheEntry)
 
 newFilelistCache = newTVarIO M.empty
+
+-- vim: sw=4 expandtab

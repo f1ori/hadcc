@@ -1,3 +1,10 @@
+--- |
+--- | This module contains a queue fixed size which drops entry, which are to old
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
 module FixedQueue where
 
 import qualified Data.Sequence as S

@@ -1,3 +1,10 @@
+--- |
+--- | This module contains a mgmt-functions to maintain a cache of filelists
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
 module FilelistCache where
 
 import Control.Concurrent.STM
@@ -31,3 +38,5 @@ getFilelistCached appState nick = do
                          cache <- readTVar (appFilelistCache appState)
 		         writeTVar (appFilelistCache appState) (M.insert nick (FlCETreeNode tree) cache)
 		     return tree
+
+-- vim: sw=4 expandtab

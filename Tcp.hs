@@ -1,3 +1,10 @@
+--- |
+--- | stuff for tcp abstractions
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
 module Tcp where
 
 import Network.Socket
@@ -37,3 +44,5 @@ tcpClientConnect host port = withSocketsDo $ do
     setSocketOption sock KeepAlive 1
     connect sock (addrAddress serveraddr)
     return (sock, (addrAddress serveraddr))
+
+-- vim: sw=4 expandtab

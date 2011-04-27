@@ -1,3 +1,10 @@
+--- |
+--- | This module contains stuff to handle and convert Filelists alias TreeNodes
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
 module Filelist where
 
 import System.Directory
@@ -136,3 +143,5 @@ xmlToTreeNode xml = toNode (head $ tail $ onlyElems $ parseXML xml)
 nodeToName :: TreeNode -> String
 nodeToName (DirNode name _ _) = name
 nodeToName (FileNode name _ _ _ _) = name
+
+-- vim: sw=4 expandtab

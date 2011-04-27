@@ -1,3 +1,10 @@
+--- |
+--- | This module contains functions generating content and stats for the fuse filesystem
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
 module FilesystemHandler where
 
 import System.IO

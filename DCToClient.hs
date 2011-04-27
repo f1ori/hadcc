@@ -1,3 +1,10 @@
+--- |
+--- | This module contains the DC-stuff for connections to other peers
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
 module DCToClient where
 
 import System.IO

@@ -1,3 +1,10 @@
+--- |
+--- | Main module, startup code
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
 import Control.Concurrent
 import System.Log.Logger
 import System.Log.Handler.Simple

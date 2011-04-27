@@ -1,7 +1,3 @@
-[http]
-ip = 127.0.0.1
-port = 8000
-
 [hub]
 ip = your.dc.hub
 port = 411
@@ -10,8 +6,7 @@ port = 411
 nick = hadcc_test
 email = anonymous@example.com
 description = your description
-myip = 172.20.42.151
+myip = 1.2.3.4
 myport = 4950
 sharesize = 300000000000
 sharedir = /mnt/share
-downloaddir = .

@@ -1,7 +1,4 @@
-How to run:
-
-wget http://download.dojotoolkit.org/release-1.5.0/dojo-release-1.5.0.tar.gz
-and unzip it into ui/js/
+HOW TO RUN:
 
 rename and edit config file
 
@@ -9,9 +6,18 @@ Start hadcc with:
 $ runhaskell Hadcc.hs
 
 
-How to install:
+HOW TO INSTALL:
+
+install missing libraries with "cabal install libx"
 
 $ runhaskell Setup.lhs configure --prefix=$HOME --user
 $ runhaskell Setup.lhs build
 $ runhaskell Setup.lhs install
+
+TODO:
+* fix design problem with multiple root share directories
+* chat in file
+* answer search request with results from own share (needs index for at least hashs?)
+* implement search in dc network (via file or directory)
+* in general more robustness, exception handling and timeouts
 

@@ -1,3 +1,10 @@
+--- |
+--- | This module contains general Configuration stuff and general type definitions needed everywhere
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
 module Config where
 
 import System.IO
@@ -22,9 +29,7 @@ data DcJob = Job String DownloadHandler
 
 -- | static application configuration
 data AppConfig = AppConfig {
-      configHttpIp :: String
-    , configHttpPort :: String
-    , configHubIp :: String
+      configHubIp :: String
     , configHubPort :: String
     , configMyIp :: String
     , configMyPort :: String
@@ -33,7 +38,6 @@ data AppConfig = AppConfig {
     , configDescription :: String
     , configShareSize :: String
     , configShareDir :: String
-    , configDownloadDir :: String
     }
 
 -- | application state, passed to almost all threads
@@ -71,9 +75,7 @@ loadConfig configFile = do
     let cp = forceEither val
     -- TODO: check welformed (no spaces in nick, numbers, ...)
     return AppConfig {
-                   configHttpIp = forceEither $ get cp "http" "ip"
-                 , configHttpPort = forceEither $ get cp "http" "port"
-                 , configHubIp = forceEither $ get cp "hub" "ip"
+                   configHubIp = forceEither $ get cp "hub" "ip"
                  , configHubPort = forceEither $ get cp "hub" "port"
                  , configMyIp = forceEither $ get cp "dc" "myip"
                  , configMyPort = forceEither $ get cp "dc" "myport"
@@ -82,7 +84,6 @@ loadConfig configFile = do
                  , configDescription = forceEither $ get cp "dc" "description"
                  , configShareSize = forceEither $ get cp "dc" "sharesize"
                  , configShareDir = forceEither $ get cp "dc" "sharedir"
-                 , configDownloadDir = forceEither $ get cp "dc" "downloaddir"
                  }
 
 
@@ -134,3 +135,5 @@ logMsg :: AppState -> String -> IO ()
 logMsg appState msg = withMVar (appLogHandle appState) $ \h -> do
                        hPutStrLn h msg
 		       hFlush h
+
+-- vim: sw=4 expandtab

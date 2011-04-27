@@ -1,3 +1,10 @@
+--- |
+--- | This module contains the DC-stuff for connections to the hub
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
 module DCToHub where
 
 import System.IO

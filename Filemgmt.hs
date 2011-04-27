@@ -1,3 +1,10 @@
+--- |
+--- | This module contains functions to handle operations on local filesystem
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
 
 module Filemgmt (
       getFileSize

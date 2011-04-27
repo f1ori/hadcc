@@ -1,3 +1,11 @@
+--- |
+--- | This module contains a simple abstraction of the fuse library
+--- | This should be reusable by other projects
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
 module Filesystem where
 
 import System.Fuse

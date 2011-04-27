@@ -1,3 +1,11 @@
+--- |
+--- | This module contains the DC-stuff common to both, connections to the hub and to other peers
+--- |
+--- Copyright   : (c) Florian Richter 2011
+--- License     : GPL
+---
+
+
 module DCCommon where
 
 import Network.Socket

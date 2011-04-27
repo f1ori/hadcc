@@ -1,10 +1,12 @@
 HOW TO RUN:
 
+install missing libraries with "cabal install libx"
+
 rename and edit config file
 
-Start hadcc with:
-$ runhaskell Hadcc.hs
-
+$ cabal configure
+$ cabal build
+$ ./dist/build/hadcc/hadcc
 
 HOW TO INSTALL:
 

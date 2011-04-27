@@ -1,15 +1,25 @@
 Name:                hadcc
 Version:             0.1
-Synopsis:            Haskell DC client
-Description:         Haskell DC client
+Cabal-Version:       >= 1.2
+Synopsis:            Haskell DC client with fuse file system interface
+Homepage:            https://github.com/f1ori/hadcc
+Copyright:           (c) 2011 Florian Richter
 License:             GPL
 License-file:        LICENSE
 Author:              Florian Richter
 Maintainer:          Florian Richter <mail@f1ori.de>
-Build-Depends:       base,bzlib,stm,HFuse,TigerHash,haskell98,bytestring,filepath,directory,mtl,split,network,MissingH,ConfigFile,HTTP,containers,xml,random,unix,hslogger
 Build-Type:          Simple
+Stability:           alpha
+Data-files:          Hadcc.cfg.example
 
-Executable:          hadcc
-Main-is:             Hadcc.hs
-Ghc-options:         -threaded
+
+Executable hadcc
+  Build-Depends:       base, bzlib, stm, HFuse, TigerHash, haskell98, bytestring, filepath,
+                       directory, mtl, split, network, MissingH, ConfigFile, containers,
+                       xml, random, unix, hslogger
+  Main-is:             Hadcc.hs
+  Ghc-options:         -threaded
+  Other-Modules:       Config, DCCommon, DCToClient, DCToHub, FilelistCache, FilelistCacheTypes,
+                       Filelist, FilelistTypes, Filemgmt, FilesystemHandler, Filesystem,
+                       FixedQueue, FixedQueueTypes, Hadcc, Tcp, TTH, TTHTypes
 

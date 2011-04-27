@@ -7,6 +7,8 @@ rename and edit config file
 $ cabal configure
 $ cabal build
 $ ./dist/build/hadcc/hadcc
+browse the directory, you specified in the config
+$ fusermount -u mointpoint
 
 HOW TO INSTALL:
 

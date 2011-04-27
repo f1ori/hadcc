@@ -38,6 +38,7 @@ data AppConfig = AppConfig {
     , configDescription :: String
     , configShareSize :: String
     , configShareDir :: String
+    , configMountpoint :: String
     }
 
 -- | application state, passed to almost all threads
@@ -84,6 +85,7 @@ loadConfig configFile = do
                  , configDescription = forceEither $ get cp "dc" "description"
                  , configShareSize = forceEither $ get cp "dc" "sharesize"
                  , configShareDir = forceEither $ get cp "dc" "sharedir"
+                 , configMountpoint = forceEither $ get cp "filesystem" "mountpoint"
                  }
 
 

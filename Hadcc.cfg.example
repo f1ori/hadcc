@@ -10,3 +10,6 @@ myip = 1.2.3.4
 myport = 4950
 sharesize = 300000000000
 sharedir = /mnt/share
+
+[filesystem]
+mountpoint = mnt/

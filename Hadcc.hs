@@ -33,6 +33,6 @@ main = do
     withMVar (appFileTree appState) (\tree -> putStrLn $ treeNodeToXml tree)
     hashFileList appState
     withMVar (appFileTree appState) (\tree -> putStrLn $ show tree)
-    startupFileSystem (start appState) (stop appState) (dcFileInfo appState)
+    startupFileSystem (configMountpoint config) (start appState) (stop appState) (dcFileInfo appState)
 
 -- vim: sw=4 expandtab

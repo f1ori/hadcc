@@ -23,5 +23,6 @@ TODO:
 * chat in file
 * answer search request with results from own share (needs index for at least hashs?)
 * implement search in dc network (via file or directory)
+* are there memory leaks?
 * in general more robustness, exception handling and timeouts
 

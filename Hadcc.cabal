@@ -11,6 +11,7 @@ Maintainer:          Florian Richter <mail@f1ori.de>
 Build-Type:          Simple
 Stability:           alpha
 Data-files:          Hadcc.cfg.example
+Extra-source-files:  README
 
 
 Executable hadcc

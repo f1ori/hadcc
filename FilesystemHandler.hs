@@ -76,12 +76,12 @@ textContentHandler text = return (readText, return ())
 -- | filesystem handler providing directory structure of TreeNode
 treeNodeFsHandler :: (TreeNode -> FsContent) -> TreeNode -> UserGroupID -> FileInfoHandler
 treeNodeFsHandler contentHandler (DirNode name _ _) ugid "" = do
-    return $ Just (getStatDir ugid, FsDir [name])
+    return $! Just (getStatDir ugid, FsDir (return [name]))
 treeNodeFsHandler contentHandler tree ugid path = do
     let searchpath = drop 1 path -- drop leading directory slash
     case searchNode searchpath tree of
-        Just node@(FileNode _ _ size _ _) -> return $ Just (getStatFileR ugid size, contentHandler node)
-        Just (DirNode _ _ children)       -> return $ Just (getStatDir ugid, FsDir (map nodeToName children))
+        Just node@(FileNode _ _ size _ _) -> return $! Just (getStatFileR ugid size, contentHandler node)
+        Just (DirNode _ _ children)       -> return $! Just (getStatDir ugid, FsDir (return $ map nodeToName children))
         Nothing                           -> return Nothing
 
 -- | filesystem handler providing base structure
@@ -91,11 +91,10 @@ dcFileInfo appState path = do
     ugid <- getUserGroupID
     case path of
 
-        "/" -> return $ Just (getStatDir ugid, FsDir ["nicks", "status", "myshare"])
+        "/" -> return $ Just (getStatDir ugid, FsDir (return ["nicks", "status", "myshare"]))
 
         "/nicks" -> do
-	            nicklist <- readMVar (appNickList appState)
-		    return $ Just (getStatDir ugid, FsDir (M.keys nicklist))
+		    return $ Just (getStatDir ugid, FsDir (M.keys `liftM` readMVar (appNickList appState)))
 
         "/status" -> return $ Just (getStatFileR ugid 1024, FsFile (textContentHandler "testing"))
 
@@ -105,7 +104,7 @@ dcFileInfo appState path = do
 	      if nick `M.member` nicklist
 	          then do
 		      case subpath of
-		          ""       -> return $ Just (getStatDir ugid, FsDir ["share", "info", "name"])
+		          ""       -> return $ Just (getStatDir ugid, FsDir (return ["share", "info", "name"]))
 			  "/name"  -> do
                               let Just (completeName, _) = M.lookup nick nicklist
                               return $ Just (getStatFileR ugid 1024, FsFile (textContentHandler completeName))
@@ -116,7 +115,7 @@ dcFileInfo appState path = do
                                                               let Just (completeNick, _) = M.lookup nick nicklist
                                                               let sharepath = drop 6 subpath
                                                               share <- getFilelistCached appState completeNick
-                                                              treeNodeFsHandler (shareContentHandler appState completeNick) share ugid sharepath
+                                                              share `seq` treeNodeFsHandler (shareContentHandler appState completeNick) share ugid sharepath
                             | otherwise                    -> return Nothing
 		      
 		  else return Nothing

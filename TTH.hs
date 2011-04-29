@@ -38,7 +38,7 @@ getCachedHash :: AppState -> FilePath -> EpochTime -> IO (Maybe String)
 getCachedHash appState path curModTime = withMVar (appTTHCache appState) $ \cache -> do
     case M.lookup path cache of
         Just (hash, modTime) -> if modTime == curModTime
-	                        then return $ Just hash
+	                        then return $! Just hash
 				else return Nothing
 	Nothing -> return Nothing
 
@@ -46,7 +46,7 @@ setHashInCache :: AppState -> FilePath -> String -> IO ()
 setHashInCache appState path hash = do
     fileStatus <- getFileStatus path
     let modTime = modificationTime fileStatus
-    newCache <- modifyMVar (appTTHCache appState) (\cache -> return $ double $ M.insert path (hash, modTime) cache)
+    newCache <- modifyMVar (appTTHCache appState) (\cache -> return $! double $ M.insert path (hash, modTime) cache)
     writeFile "Hadcc.cache" (show newCache)
     where
         double a = (a,a)
@@ -64,7 +64,7 @@ hashFileList appState = do
         traverse appState dirs (FileNode name path _ _ Nothing) = do
 	    hash <- getHashForFile path
 	    setHashInCache appState path hash
-	    modifyMVar_ (appFileTree appState) (\n -> return $ setHash hash (reverse (name:dirs)) n)
+	    modifyMVar_ (appFileTree appState) (\n -> return $! setHash hash (reverse (name:dirs)) n)
 
         setHash :: String -> [String] -> TreeNode -> TreeNode
         setHash hash [name] file@(FileNode fname _ _ _ _)

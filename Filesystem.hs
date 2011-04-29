@@ -20,7 +20,7 @@ import Control.Monad
 
 
 type FsObject = (FileStat, FsContent)
-data FsContent = FsDir [FilePath]
+data FsContent = FsDir (IO [FilePath])
                | FsFile (IO (ReadFunc, CloseFunc))
 
 type FileInfoHandler = FilePath -> IO (Maybe FsObject)
@@ -98,8 +98,9 @@ fsReadDir infoHandler path = do
     info <- infoHandler path
     case info of
         Just (stat, FsDir list)   -> do
-                      stats <- mapM (getStats path) list
-                      return $ Right ([(".", getStatDir ugid), ("..", getStatDir ugid)] ++ (zip list stats))
+                      dirlist <- list
+                      stats <- mapM (getStats path) dirlist
+                      return $ Right ([(".", getStatDir ugid), ("..", getStatDir ugid)] ++ (zip dirlist stats))
         Just (stat, FsFile _) ->
                       return $ Left eNOTDIR
         Nothing                   ->
@@ -137,7 +138,7 @@ fuseOps startHandler stopHandler infoHandler = defaultFuseOps {
 -- | start fuse manager, puts program in background
 startupFileSystem :: FilePath -> IO () -> IO () -> FileInfoHandler -> IO ()
 startupFileSystem mountpoint startHandler stopHandler infoHandler = do
-    withArgs [mountpoint] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler
-    -- debug: withArgs [mountpoint, "-f"] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler
+    --withArgs [mountpoint] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler
+    withArgs [mountpoint, "-f"] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler
 
 -- vim: sw=4 expandtab

@@ -16,7 +16,10 @@ import Control.Monad
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Codec.Compression.BZip as BZip
-import Text.XML.Light
+import Text.XML.HXT.DOM.TypeDefs
+import Data.Tree.NTree.TypeDefs
+import Text.XML.HXT.Parser.XmlParsec
+import Text.XML.HXT.DOM.ShowXml
 
 
 import FilelistTypes
@@ -131,13 +134,34 @@ xmlBzToTreeNode xmlbz = (xmlToTreeNode . BZip.decompress) xmlbz
 
 -- | convert plain xml to TreeNode object
 xmlToTreeNode :: L.ByteString -> TreeNode
-xmlToTreeNode xml = toNode (head $ tail $ onlyElems $ parseXML xml)
+xmlToTreeNode xml = toNode (head $ onlyTags $ xread $ dropXmlDecl $ C.unpack xml)
     where
-        toNode (Element (QName "FileListing" _ _) _ content _) = DirNode "base" "" (map toNode (onlyElems content))
-        toNode (Element (QName "Directory" _ _) attr content _) = DirNode (getAttr "Name" attr) "" (map toNode (onlyElems content))
-        toNode (Element (QName "File" _ _) attr _ _) = FileNode (getAttr "Name" attr) "" (read $ getAttr "Size" attr)
-	                                                        0 (Just $ getAttr "TTH" attr)
-	getAttr name attr = fromJust (lookupAttr (QName name Nothing Nothing) attr)
+        toNode (NTree (XTag tag attr) children)
+            | localPart tag == "FileListing" = DirNode "base" "" (map toNode (onlyTags children))
+            | localPart tag == "Directory"   = DirNode (getAttr "Name" attr) "" (map toNode (onlyTags children))
+            | localPart tag == "File"        = FileNode (getAttr "Name" attr) "" (read $ getAttr "Size" attr)
+                                                        0 (Just $ getAttr "TTH" attr)
+
+        getAttr :: String -> XmlTrees -> String
+        getAttr name attrs = let Just value = lookup name $ map getAttrNameValue attrs in value
+
+        getAttrNameValue :: XmlTree -> (String, String)
+        getAttrNameValue (NTree (XAttr name) value) = (localPart name, xshow value)
+
+        onlyTags :: XmlTrees -> XmlTrees
+        onlyTags children = filter isTag children
+
+        isTag :: XmlTree -> Bool
+        isTag (NTree (XTag _ _) _) = True
+        isTag _          = False
+
+-- | hack to remove <?xml-declaration, xread can't handle this
+dropXmlDecl ('<':'?':'x':'m':'l':rest) = tail $ dropWhile (/='>') rest
+dropXmlDecl rest = rest
+
+-- | print hxt parsing output for debugging
+printFilelist :: L.ByteString -> String
+printFilelist filelist = show $ xread $ dropXmlDecl $ C.unpack $ BZip.decompress filelist
 
 -- | get name of TreeNode object (directory name or filename)
 nodeToName :: TreeNode -> String

@@ -82,7 +82,7 @@ procMessages h conState handler content | L.null content = return ()
         ToClient nick (DownloadJob size downloadHandler) -> do
                     putStrLn "Download File"
                     let (file, new_msgs) = L.splitAt (fromInteger size) msgs
-                    finish <- downloadHandler h $! file
+                    finish <- downloadHandler h file
                     return ((ToClient nick Download), new_msgs, finish)
         _ -> return (newState, msgs, False)
     if not finish

@@ -8,7 +8,9 @@
 module FilesystemHandler where
 
 import System.IO
+import System.Fuse
 import System.Timeout
+import Network.Socket
 import Control.Concurrent.MVar
 import Control.Monad
 import System.Log.Logger
@@ -23,19 +25,26 @@ import FilelistTypes
 import Filelist
 import FilelistCache
 import DCToClient
+import Udp
+import Search
 
 peer_timeout = 2000000
 
 shareContentHandler :: AppState -> Nick -> TreeNode -> FsContent
-shareContentHandler appState nick (FileNode _ _ _ _ (Just hash)) = FsFile openF
+shareContentHandler appState nick (FileNode _ _ _ _ (Just hash)) = FsFile openF openInfo
     where
+        openInfo = FuseOpenInfo {
+                     fsDirectIo = False
+                   , fsKeepCache = False
+                   , fsNonseekable = True
+                   }
         openF = do
             finishedMVar <- newEmptyMVar
             contentMVar <- newEmptyMVar
             downloadFile appState (downloadHandler finishedMVar contentMVar) nick ("TTH/" ++ hash)
             result <- timeout peer_timeout $ readMVar contentMVar 
             case result of
-                Just _ -> return (readF contentMVar, closeF finishedMVar)
+                Just _ -> return (readF contentMVar, Nothing, closeF finishedMVar)
                 Nothing -> error "peer does not connect"
 
         readF :: MVar L.ByteString -> ReadFunc
@@ -58,20 +67,64 @@ shareContentHandler appState nick (FileNode _ _ _ _ (Just hash)) = FsFile openF
 
 -- | file content handler, providing data from local share
 myshareContentHandler :: TreeNode -> FsContent
-myshareContentHandler (FileNode _ path _ _ _) = FsFile (openF path)
+myshareContentHandler (FileNode _ path _ _ _) = FsFile (openF path) openInfo
     where
+        openInfo = FuseOpenInfo {
+                     fsDirectIo = False
+                   , fsKeepCache = False
+                   , fsNonseekable = False
+                   }
         openF path = do
             h <- openFile path ReadMode
-            return (readF h, hClose h)
+            return (readF h, Nothing, hClose h)
         readF h size offset = do
             hSeek h AbsoluteSeek (fromInteger offset)
             B.hGet h (fromInteger size)
 
 -- | file content handler, providing simple text file
-textContentHandler :: String -> IO (ReadFunc, CloseFunc)
-textContentHandler text = return (readText, return ())
+textContentHandler :: String -> FsContent
+textContentHandler text = FsFile (return (readText, Nothing, return ())) openInfo
     where
+        openInfo = FuseOpenInfo {
+                     fsDirectIo = True
+                   , fsKeepCache = False
+                   , fsNonseekable = False
+                   }
         readText size offset = return $ (B.take (fromIntegral size) $ B.drop (fromIntegral offset) (B.pack text))
+
+checkFuncOnInterval :: Int -> IO Bool -> IO a -> IO ( Maybe a)
+checkFuncOnInterval interval checkFunc workFunc = do
+    result <- timeout interval workFunc
+    case result of
+        Just value -> return $ Just value
+        Nothing    -> do
+            check <- checkFunc
+            if check
+                then return Nothing
+                else checkFuncOnInterval interval checkFunc workFunc
+
+searchContentHandler :: AppState -> FsContent
+searchContentHandler appState = FsFile openF openInfo
+    where
+        openF = do
+            (sock, port) <- initUdpServer
+            putStrLn "open search"
+            return (readF sock, Just $ writeF appState port, sClose sock)
+        openInfo = FuseOpenInfo {
+                     fsDirectIo = True
+                   , fsKeepCache = False
+                   , fsNonseekable = True
+                   }
+        readF sock size offset = do
+            putStrLn "read search"
+            result <- checkFuncOnInterval 1000000 isFuseInterrupted (recv sock (fromInteger size))
+            case result of
+                Just content -> return $ B.pack (content ++ "\n")
+                Nothing      -> return $ B.empty
+        writeF appState port content offset = do
+            putStrLn ("write search: " ++ (B.unpack content))
+            searchDC appState port (simpleSearch $ B.unpack content)
+            return $ fromIntegral $ B.length content
 
 -- | filesystem handler providing directory structure of TreeNode
 treeNodeFsHandler :: (TreeNode -> FsContent) -> TreeNode -> UserGroupID -> FileInfoHandler
@@ -91,12 +144,14 @@ dcFileInfo appState path = do
     ugid <- getUserGroupID
     case path of
 
-        "/" -> return $ Just (getStatDir ugid, FsDir (return ["nicks", "status", "myshare"]))
+        "/" -> return $ Just (getStatDir ugid, FsDir (return ["nicks", "status", "myshare", "search"]))
 
         "/nicks" -> do
 		    return $ Just (getStatDir ugid, FsDir (M.keys `liftM` readMVar (appNickList appState)))
 
-        "/status" -> return $ Just (getStatFileR ugid 1024, FsFile (textContentHandler "testing"))
+        "/status" -> return $ Just (getStatFileR ugid 0, (textContentHandler "testing"))
+
+        "/search" -> return $ Just (getStatFileRW ugid 0, (searchContentHandler appState))
 
         _ | (take 7 path) == "/nicks/" -> do
 	      nicklist <- readMVar (appNickList appState)
@@ -107,10 +162,10 @@ dcFileInfo appState path = do
 		          ""       -> return $ Just (getStatDir ugid, FsDir (return ["share", "info", "name"]))
 			  "/name"  -> do
                               let Just (completeName, _) = M.lookup nick nicklist
-                              return $ Just (getStatFileR ugid 1024, FsFile (textContentHandler completeName))
+                              return $ Just (getStatFileR ugid 0, (textContentHandler completeName))
 			  "/info"  -> do
                               let Just (_, nickinfo) = M.lookup nick nicklist
-                              return $ Just (getStatFileR ugid 1024, FsFile (textContentHandler nickinfo))
+                              return $ Just (getStatFileR ugid 0, (textContentHandler nickinfo))
 			  _ | (take 6 subpath) == "/share" -> do
                                                               let Just (completeNick, _) = M.lookup nick nicklist
                                                               let sharepath = drop 6 subpath

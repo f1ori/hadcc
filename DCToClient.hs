@@ -9,6 +9,7 @@ module DCToClient where
 
 import System.IO
 import System.Timeout
+import Network.Socket
 import Control.Concurrent
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -25,6 +26,7 @@ import Filelist
 import DCCommon
 import FixedQueueTypes
 import FixedQueue
+import Search
 
 -- | convert string to lower case (didn't find a library function)
 toLowerCase :: String -> String
@@ -237,5 +239,10 @@ downloadFile appState downloadHandler nick file = do
                     writeTVar (appJobs appState) (M.delete nick jobs)
             return result
             
+searchDC :: AppState -> PortNumber -> Search -> IO ()
+searchDC appState udpPort search = do
+    let searchstring = searchToDC search
+    withMVar (appHubHandle appState) $ \hubHandle -> do
+        sendCmd hubHandle "Search" ((configMyIp $ appConfig appState) ++ ":" ++ (show udpPort) ++ " " ++ searchstring)
 
 -- vim: sw=4 expandtab

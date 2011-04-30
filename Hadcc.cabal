@@ -1,6 +1,6 @@
 Name:                hadcc
 Version:             0.1
-Cabal-Version:       >= 1.2
+Cabal-Version:       >= 1.8
 Synopsis:            Haskell DC client with fuse file system interface
 Homepage:            https://github.com/f1ori/hadcc
 Copyright:           (c) 2011 Florian Richter
@@ -15,12 +15,26 @@ Extra-source-files:  README
 
 
 Executable hadcc
-  Build-Depends:       base, bzlib, stm, HFuse, TigerHash, haskell98, bytestring, filepath,
+  Build-Depends:       base, bzlib, stm, TigerHash, haskell98, bytestring, filepath,
                        directory, mtl, split, network, MissingH, ConfigFile, containers,
-                       random, unix, hslogger, hxt, deepseq
+                       random, unix, hslogger, hxt, deepseq, hadcc
   Main-is:             Hadcc.hs
   Ghc-options:         -threaded
   Other-Modules:       Config, DCCommon, DCToClient, DCToHub, FilelistCache, FilelistCacheTypes,
                        Filelist, FilelistTypes, Filemgmt, FilesystemHandler, Filesystem,
-                       FixedQueue, FixedQueueTypes, Hadcc, Tcp, TTH, TTHTypes
+                       FixedQueue, FixedQueueTypes, Hadcc, Tcp, TTH, TTHTypes, Search, Udp
+
+
+Library
+  Build-Depends:          base >= 4 && < 5, unix, bytestring
+  exposed-Modules:        System.Fuse
+  Extensions:             ForeignFunctionInterface ScopedTypeVariables EmptyDataDecls
+  Includes:               sys/statfs.h, dirent.h, fuse.h, fcntl.h
+  Include-Dirs:           /usr/include, /usr/local/include, .
+  Extra-Libraries:        fuse
+  Extra-Lib-Dirs:         /usr/local/lib
+  CC-Options:             -D_FILE_OFFSET_BITS=64
+  if os(darwin) {
+    CC-Options:           "-DMACFUSE"
+  }
 

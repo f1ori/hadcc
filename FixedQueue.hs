@@ -17,16 +17,24 @@ import Config
 max_entries = 100
 
 -- | put entry in list
-putElem :: FixedQueue t -> t -> IO ()
-putElem queue element = atomically $ do
+putFixedQueue :: FixedQueue t -> t -> IO ()
+putFixedQueue queue element = atomically $ do
     (curNum, list) <- readTVar queue
     writeTVar queue (curNum+1, element S.<| (S.take max_entries list))
 
 -- | blocks until events with num>last available
-takeElem :: FixedQueue t -> Int -> IO (Int, [t])
-takeElem queue last = atomically $ do
+takeFixedQueue :: FixedQueue t -> Int -> IO (Int, [t])
+takeFixedQueue queue last = atomically $ do
     (curNum, list) <- readTVar queue
     when (last >= curNum) retry
     return (curNum, reverse $ toList $ S.take (curNum - last) list)
+
+-- | blocks until events with num>last available
+takeOneFixedQueue :: FixedQueue t -> Int -> IO (Int, t)
+takeOneFixedQueue queue last = atomically $ do
+    (curNum, list) <- readTVar queue
+    when (last >= curNum) retry
+    let returnNum = max (last + 1) (curNum - (S.length list) + 1)
+    return (returnNum, S.index list (curNum - returnNum))
 
 -- vim: sw=4 expandtab

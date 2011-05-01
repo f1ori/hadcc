@@ -28,7 +28,6 @@ handleHub :: AppState -> Handle -> ConnectionState -> String -> IO ConnectionSta
 handleHub appState h conState msg = do
     case getCmd msg of
         Just "$Lock"    -> do
-	                       logMsg appState "Lock"
                                withMVar (appHubHandle appState) $ \hubHandle -> do
 	                           hPutStr hubHandle "$Key ........A .....0.0. 0. 0. 0. 0. 0.|"
 	                           hPutStr hubHandle ("$ValidateNick " ++ (configNick $ appConfig appState) ++ "|")
@@ -62,19 +61,16 @@ handleHub appState h conState msg = do
 			       modifyMVar_ (appNickList appState) (return . M.delete (filesystemSafe nick))
 			       return conState
         Just "$NickList" -> do
-	                       logMsg appState ("Nicklist: " ++ msg)
 			       let mynick = (configNick $ appConfig appState)
                                let nicklist = filter (/=mynick) $ filter (/="") (splitOn "$$" (tail $ dropWhile (/=' ') msg))
 			       let genGetINFOCmd nick = "$GetINFO " ++ nick ++ " " ++ (configNick $ appConfig appState) ++ "|"
-			       logMsg appState $ concat $ map genGetINFOCmd nicklist
                                withMVar (appHubHandle appState) $ \hubHandle -> do
 			           hPutStr hubHandle $ concat $ map genGetINFOCmd nicklist
 			           hFlush hubHandle
-			       logMsg appState "sent"
 			       return conState
         Just "$Chat" -> do
 	                       putStrLn ("Chat: " ++ msg)
-			       --sendEvent appState (EChatMsg msg)
+			       putFixedQueue (appChatMsgs appState) msg
 			       return conState
         Just "$ConnectToMe" -> do
 	                       let hostport = last (splitOn " " msg)
@@ -87,12 +83,11 @@ handleHub appState h conState msg = do
         Nothing         -> do
 	                       putStrLn "No Command:"
 	                       putStrLn msg
-	                       logMsg appState msg
-			       --sendEvent appState (EChatMsg msg)
+			       putFixedQueue (appChatMsgs appState) msg
 			       return conState
         _               -> do
-	                       logMsg appState "Unkown Command:"
-	                       logMsg appState msg
+	                       putStrLn "Unkown Command:"
+	                       putStrLn msg
 			       return conState
 
 -- vim: sw=4 expandtab

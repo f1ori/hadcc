@@ -13,6 +13,7 @@ import System.Timeout
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
 import Control.Concurrent.MVar
+import Control.Concurrent.STM
 import Control.Monad
 import System.Log.Logger
 import qualified Data.Map as M
@@ -27,17 +28,20 @@ import Filesystem
 import FilelistTypes
 import Filelist
 import FilelistCache
+import FixedQueue
 import DCToClient
 import Udp
 import Search
 
 peer_timeout = 2000000
 
+-- | small script how to use the search
 searchScript = "#!/bin/bash\n\
                \# Small example how to use the search\n\n\
                \f=`dirname \"$0\"`\n\
                \exec 3<>$f/search; echo $1>&3; trap 'exec 3>&-' INT; cat <&3\n"
 
+-- | file handle for dc shares
 shareContentHandler :: AppState -> Nick -> TreeNode -> FsContent
 shareContentHandler appState nick (FileNode _ _ _ _ (Just hash)) = FsFile openF openInfo
     where
@@ -100,6 +104,7 @@ textContentHandler text = FsFile (return (readText, Nothing, return ())) openInf
                    }
         readText size offset = return $ (B.take (fromIntegral size) $ B.drop (fromIntegral offset) (B.pack text))
 
+-- | check function in interval (in microseconds)
 checkFuncOnInterval :: Int -> IO Bool -> IO a -> IO ( Maybe a)
 checkFuncOnInterval interval checkFunc workFunc = do
     result <- timeout interval workFunc
@@ -111,6 +116,7 @@ checkFuncOnInterval interval checkFunc workFunc = do
                 then return Nothing
                 else checkFuncOnInterval interval checkFunc workFunc
 
+-- | search file handler
 searchContentHandler :: AppState -> FsContent
 searchContentHandler appState = FsFile openF openInfo
     where
@@ -131,6 +137,30 @@ searchContentHandler appState = FsFile openF openInfo
             searchDC appState port (simpleSearch $ E.decodeUtf8 content)
             return $ fromIntegral $ B.length content
 
+chatContentHandler :: AppState -> FsContent
+chatContentHandler appState = FsFile openF openInfo
+    where
+        openF = do
+            queueIndex <- newMVar 0
+            return (readF appState queueIndex, Just $ writeF appState, return ())
+        openInfo = FuseOpenInfo {
+                     fsDirectIo = True
+                   , fsKeepCache = False
+                   , fsNonseekable = True
+                   }
+        readF appState queueIndex size offset = do
+            result <- checkFuncOnInterval 1000000 isFuseInterrupted $
+                modifyMVar queueIndex $ \index -> do
+                    putStrLn $ show index
+                    chat <- atomically $ readTVar (appChatMsgs appState)
+                    putStrLn $ show chat
+                    (newIndex, msg) <- takeOneFixedQueue (appChatMsgs appState) index
+                    return (newIndex, B.pack (msg ++ "\n"))
+            case result of
+                Just content -> return content
+                Nothing      -> return B.empty
+        writeF appState content offset = return 0
+
 -- | filesystem handler providing directory structure of TreeNode
 treeNodeFsHandler :: (TreeNode -> FsContent) -> TreeNode -> UserGroupID -> FileInfoHandler
 treeNodeFsHandler contentHandler (DirNode name _ _) ugid "" = do
@@ -149,12 +179,14 @@ dcFileInfo appState path = do
     ugid <- getUserGroupID
     case path of
 
-        "/" -> return $ Just (getStatDir ugid, FsDir (return ["nicks", "status", "myshare", "search", "dosearch"]))
+        "/" -> return $ Just (getStatDir ugid, FsDir (return ["nicks", "status", "myshare", "search", "dosearch", "chat"]))
 
         "/nicks" -> do
 		    return $ Just (getStatDir ugid, FsDir (M.keys `liftM` readMVar (appNickList appState)))
 
         "/status" -> return $ Just (getStatFileR ugid 0, (textContentHandler "testing"))
+
+        "/chat" -> return $ Just (getStatFileRW ugid 0, (chatContentHandler appState))
 
         "/search" -> return $ Just (getStatFileRW ugid 0, (searchContentHandler appState))
 

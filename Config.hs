@@ -63,8 +63,6 @@ data AppState = AppState {
     , appTTHCache :: MVar TTHCache
     -- | last chat msgs
     , appChatMsgs :: FixedQueue String
-    -- | last chat msgs
-    , appLogHandle :: MVar Handle
     -- | cache filelists for filesystem
     , appFilelistCache :: FilelistCache
     }
@@ -101,8 +99,6 @@ newAppState appConfig = do
     hubHandle <- newEmptyMVar
     tthCache <- newEmptyMVar
     chatMsgs <- newFixedQueue
-    handle <- openFile "dc.log" AppendMode
-    logHandle <- newMVar handle
     filelistCache <- newFilelistCache
     return AppState {
                      appConfig = appConfig
@@ -115,7 +111,6 @@ newAppState appConfig = do
                    , appNickList = nicklist
                    , appTTHCache = tthCache
                    , appChatMsgs = chatMsgs
-                   , appLogHandle = logHandle
                    , appFilelistCache = filelistCache
                    }
 
@@ -132,10 +127,5 @@ getMyINFOStr appState = "$MyINFO $ALL " ++ nick ++ " " ++ desc ++ "<hdc V:0.1,M:
 
 filesystemSafe :: Nick -> Nick
 filesystemSafe nick = filter (\x -> isAlphaNum x || elem x ".:-_+" ) nick
-
-logMsg :: AppState -> String -> IO ()
-logMsg appState msg = withMVar (appLogHandle appState) $ \h -> do
-                       hPutStrLn h msg
-		       hFlush h
 
 -- vim: sw=4 expandtab

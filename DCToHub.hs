@@ -10,16 +10,20 @@ module DCToHub where
 import System.IO
 import Control.Concurrent
 import Control.Monad
+import Network.Socket
 import System.Log.Logger
 import Control.Exception.Base
 import Data.List.Split
 import qualified Data.Map as M
+import Text.Printf
+import qualified Data.Text as T
 
 import DCCommon
 import DCToClient
 import FixedQueue
 import FixedQueueTypes
 import Config
+import Search
 
 startupHub :: AppState -> Handle -> IO ()
 startupHub appState h = putMVar (appHubHandle appState) h -- save handle for syncronisation
@@ -89,5 +93,22 @@ handleHub appState h conState msg = do
 	                       putStrLn "Unkown Command:"
 	                       putStrLn msg
 			       return conState
+
+searchDC :: AppState -> PortNumber -> Search -> IO ()
+searchDC appState udpPort search = do
+    let searchstring = searchToDC search
+    withMVar (appHubHandle appState) $ \hubHandle -> do
+        sendCmd hubHandle "Search" ((configMyIp $ appConfig appState) ++ ":" ++ (show udpPort) ++ " " ++ searchstring)
+
+sendChatMsg :: AppState -> T.Text -> IO ()
+sendChatMsg appState msg = do
+    let nick = configNick $ appConfig appState
+    let cmd = printf "<%s> %s|" nick (T.unpack $ T.strip $ chatEscape msg)
+    --putStrLn ("CHAAAAAAAT: " ++ cmd)
+    withMVar (appHubHandle appState) $ \hubHandle -> do
+        hPutStr hubHandle cmd
+        hFlush hubHandle
+    where
+        chatEscape str = T.replace (T.pack "$") (T.pack "&#36;") $ T.replace (T.pack "|") (T.pack "&#124;") str
 
 -- vim: sw=4 expandtab

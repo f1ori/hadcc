@@ -239,10 +239,4 @@ downloadFile appState downloadHandler nick file = do
                     writeTVar (appJobs appState) (M.delete nick jobs)
             return result
             
-searchDC :: AppState -> PortNumber -> Search -> IO ()
-searchDC appState udpPort search = do
-    let searchstring = searchToDC search
-    withMVar (appHubHandle appState) $ \hubHandle -> do
-        sendCmd hubHandle "Search" ((configMyIp $ appConfig appState) ++ ":" ++ (show udpPort) ++ " " ++ searchstring)
-
 -- vim: sw=4 expandtab

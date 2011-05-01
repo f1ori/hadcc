@@ -21,7 +21,7 @@ import Control.Monad
 
 type FsObject = (FileStat, FsContent)
 data FsContent = FsDir (IO [FilePath])
-               | FsFile (IO (ReadFunc, Maybe WriteFunc, CloseFunc)) FuseOpenInfo
+               | FsFile (OpenMode -> IO (Either Errno (ReadFunc, Maybe WriteFunc, CloseFunc))) FuseOpenInfo
 
 type FileInfoHandler = FilePath -> IO (Maybe FsObject)
 
@@ -67,28 +67,17 @@ getStat (uid, gid) entryType fileModeStr size = FileStat
 
 fsOpen :: FileInfoHandler -> FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno (FuseOpenInfo, FileHandle))
 fsOpen infoHandler path mode flags = do
-    case mode of
-        ReadOnly -> do 
-            object <- infoHandler path
-	    case object of
-	        Just (_, FsFile openFunc openInfo)  -> do
-                          (readFunc, writeFunc, closeFunc) <- openFunc
+    object <- infoHandler path
+    case object of
+        Just (_, FsFile openFunc openInfo)  -> do
+                  result <- openFunc mode
+                  case result of
+                      Left errno ->
+                          return $ Left errno
+                      Right (readFunc, writeFunc, closeFunc) ->
                           return $ Right (openInfo ,(readFunc, writeFunc, closeFunc))
-	        Just (_, FsDir _)  -> return $ Left eNOENT
-                Nothing            -> return $ Left eNOENT
-
-        ReadWrite -> do 
-            object <- infoHandler path
-	    case object of
-	        Just (_, FsFile openFunc openInfo)  -> do
-                          (readFunc, writeFunc, closeFunc) <- openFunc
-                          case writeFunc of
-                              Just writeF -> return $ Right (openInfo, (readFunc, writeFunc, closeFunc))
-                              Nothing     -> return $ Left eACCES
-	        Just (_, FsDir _)  -> return $ Left eNOENT
-                Nothing            -> return $ Left eNOENT
-
-	_ -> return $ Left eACCES
+        Just (_, FsDir _)  -> return $ Left eNOENT
+        Nothing            -> return $ Left eNOENT
 
 
 fsRead :: FilePath -> FileHandle -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)

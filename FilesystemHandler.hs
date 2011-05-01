@@ -30,6 +30,7 @@ import Filelist
 import FilelistCache
 import FixedQueue
 import DCToClient
+import DCToHub
 import Udp
 import Search
 
@@ -50,14 +51,15 @@ shareContentHandler appState nick (FileNode _ _ _ _ (Just hash)) = FsFile openF 
                    , fsKeepCache = False
                    , fsNonseekable = True
                    }
-        openF = do
+        openF ReadOnly = do
             finishedMVar <- newEmptyMVar
             contentMVar <- newEmptyMVar
             downloadFile appState (downloadHandler finishedMVar contentMVar) nick ("TTH/" ++ hash)
             result <- timeout peer_timeout $ readMVar contentMVar 
             case result of
-                Just _ -> return (readF contentMVar, Nothing, closeF finishedMVar)
-                Nothing -> error "peer does not connect"
+                Just _ -> return $ Right (readF contentMVar, Nothing, closeF finishedMVar)
+                Nothing -> return $ Left eIO
+        openF _       = return $ Left eACCES
 
         readF :: MVar L.ByteString -> ReadFunc
         readF contentMVAr size offset = do
@@ -86,22 +88,25 @@ myshareContentHandler (FileNode _ path _ _ _) = FsFile (openF path) openInfo
                    , fsKeepCache = False
                    , fsNonseekable = False
                    }
-        openF path = do
+        openF path ReadOnly = do
             h <- openFile path ReadMode
-            return (readF h, Nothing, hClose h)
+            return $ Right (readF h, Nothing, hClose h)
+        openF path _        = return $ Left eACCES
         readF h size offset = do
             hSeek h AbsoluteSeek (fromInteger offset)
             B.hGet h (fromInteger size)
 
 -- | file content handler, providing simple text file
 textContentHandler :: String -> FsContent
-textContentHandler text = FsFile (return (readText, Nothing, return ())) openInfo
+textContentHandler text = FsFile openF openInfo
     where
         openInfo = FuseOpenInfo {
                      fsDirectIo = True
                    , fsKeepCache = False
                    , fsNonseekable = False
                    }
+        openF ReadOnly = return $ Right(readText, Nothing, return ())
+        openF _        = return $ Left eACCES
         readText size offset = return $ (B.take (fromIntegral size) $ B.drop (fromIntegral offset) (B.pack text))
 
 -- | check function in interval (in microseconds)
@@ -120,9 +125,10 @@ checkFuncOnInterval interval checkFunc workFunc = do
 searchContentHandler :: AppState -> FsContent
 searchContentHandler appState = FsFile openF openInfo
     where
-        openF = do
+        openF ReadWrite = do
             (sock, port) <- initUdpServer
-            return (readF sock, Just $ writeF appState port, sClose sock)
+            return $ Right (readF sock, Just $ writeF appState port, sClose sock)
+        openF _         = return $ Left eACCES
         openInfo = FuseOpenInfo {
                      fsDirectIo = True
                    , fsKeepCache = False
@@ -140,9 +146,9 @@ searchContentHandler appState = FsFile openF openInfo
 chatContentHandler :: AppState -> FsContent
 chatContentHandler appState = FsFile openF openInfo
     where
-        openF = do
+        openF mode = do
             queueIndex <- newMVar 0
-            return (readF appState queueIndex, Just $ writeF appState, return ())
+            return $ Right (readF appState queueIndex, Just $ writeF appState, return ())
         openInfo = FuseOpenInfo {
                      fsDirectIo = True
                    , fsKeepCache = False
@@ -159,7 +165,9 @@ chatContentHandler appState = FsFile openF openInfo
             case result of
                 Just content -> return content
                 Nothing      -> return B.empty
-        writeF appState content offset = return 0
+        writeF appState content offset = do
+            sendChatMsg appState (E.decodeUtf8 content)
+            return $ fromIntegral $ B.length content
 
 -- | filesystem handler providing directory structure of TreeNode
 treeNodeFsHandler :: (TreeNode -> FsContent) -> TreeNode -> UserGroupID -> FileInfoHandler

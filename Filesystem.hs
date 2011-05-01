@@ -41,7 +41,7 @@ getUserGroupID = do
 getStatDir ugid = getStat ugid Directory "rx" 0
 getStatFileR ugid size = getStat ugid RegularFile "r" size
 getStatFileRW ugid size = getStat ugid RegularFile "rw" size
-getStatSocket ugid = getStat ugid Socket "rw" 0
+getStatFileRX ugid size = getStat ugid RegularFile "rx" size
 
 getStat :: Integral n => UserGroupID -> EntryType -> String -> n -> FileStat
 getStat (uid, gid) entryType fileModeStr size = FileStat
@@ -157,7 +157,7 @@ fuseOps startHandler stopHandler infoHandler = defaultFuseOps {
 -- | start fuse manager, puts program in background
 startupFileSystem :: FilePath -> IO () -> IO () -> FileInfoHandler -> IO ()
 startupFileSystem mountpoint startHandler stopHandler infoHandler = do
-    --withArgs [mountpoint] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler
-    withArgs [mountpoint, "-f", "-d"] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler
+    withArgs [mountpoint] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler
+    --debug: withArgs [mountpoint, "-f", "-d"] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler
 
 -- vim: sw=4 expandtab

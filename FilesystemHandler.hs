@@ -10,13 +10,16 @@ module FilesystemHandler where
 import System.IO
 import System.Fuse
 import System.Timeout
-import Network.Socket
+import Network.Socket hiding (send, sendTo, recv, recvFrom)
+import Network.Socket.ByteString
 import Control.Concurrent.MVar
 import Control.Monad
 import System.Log.Logger
 import qualified Data.Map as M
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as L
+import qualified Data.Text as T
+import Data.Text.Encoding as E
 import Data.Tuple
 
 import Config
@@ -29,6 +32,11 @@ import Udp
 import Search
 
 peer_timeout = 2000000
+
+searchScript = "#!/bin/bash\n\
+               \# Small example how to use the search\n\n\
+               \f=`dirname \"$0\"`\n\
+               \exec 3<>$f/search; echo $1>&3; trap 'exec 3>&-' INT; cat <&3\n"
 
 shareContentHandler :: AppState -> Nick -> TreeNode -> FsContent
 shareContentHandler appState nick (FileNode _ _ _ _ (Just hash)) = FsFile openF openInfo
@@ -108,7 +116,6 @@ searchContentHandler appState = FsFile openF openInfo
     where
         openF = do
             (sock, port) <- initUdpServer
-            putStrLn "open search"
             return (readF sock, Just $ writeF appState port, sClose sock)
         openInfo = FuseOpenInfo {
                      fsDirectIo = True
@@ -116,14 +123,12 @@ searchContentHandler appState = FsFile openF openInfo
                    , fsNonseekable = True
                    }
         readF sock size offset = do
-            putStrLn "read search"
             result <- checkFuncOnInterval 1000000 isFuseInterrupted (recv sock (fromInteger size))
             case result of
-                Just content -> return $ B.pack (content ++ "\n")
+                Just content -> return $ B.pack $ printSearchResult $ dcToSearchResult $ E.decodeUtf8 content
                 Nothing      -> return $ B.empty
         writeF appState port content offset = do
-            putStrLn ("write search: " ++ (B.unpack content))
-            searchDC appState port (simpleSearch $ B.unpack content)
+            searchDC appState port (simpleSearch $ E.decodeUtf8 content)
             return $ fromIntegral $ B.length content
 
 -- | filesystem handler providing directory structure of TreeNode
@@ -144,7 +149,7 @@ dcFileInfo appState path = do
     ugid <- getUserGroupID
     case path of
 
-        "/" -> return $ Just (getStatDir ugid, FsDir (return ["nicks", "status", "myshare", "search"]))
+        "/" -> return $ Just (getStatDir ugid, FsDir (return ["nicks", "status", "myshare", "search", "dosearch"]))
 
         "/nicks" -> do
 		    return $ Just (getStatDir ugid, FsDir (M.keys `liftM` readMVar (appNickList appState)))
@@ -152,6 +157,8 @@ dcFileInfo appState path = do
         "/status" -> return $ Just (getStatFileR ugid 0, (textContentHandler "testing"))
 
         "/search" -> return $ Just (getStatFileRW ugid 0, (searchContentHandler appState))
+
+        "/dosearch" -> return $ Just (getStatFileRX ugid 0, (textContentHandler searchScript))
 
         _ | (take 7 path) == "/nicks/" -> do
 	      nicklist <- readMVar (appNickList appState)

@@ -18,11 +18,17 @@ $ runhaskell Setup.lhs configure --prefix=$HOME --user
 $ runhaskell Setup.lhs build
 $ runhaskell Setup.lhs install
 
+FEATURES:
+* online nicks as directory list
+* view nick info 
+* browse share of remote users
+* download file from shares via cp & Co
+  (files non seekable, but mplayer sometimes can decode direct stream)
+* browse and access own share
+* searches via a socket-like file (see /dosearch script)
+
 TODO:
-* fix design problem with multiple root share directories
+* support multiple root share directories
 * chat in file
-* answer search request with results from own share (needs index for at least hashs?)
-* implement search in dc network (via file or directory)
-* are there memory leaks?
-* in general more robustness, exception handling and timeouts
+* answer search request with results from own share (needs index for at least hashes?)
 

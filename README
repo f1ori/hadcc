@@ -26,9 +26,11 @@ FEATURES:
   (files non seekable, but mplayer sometimes can decode direct stream)
 * browse and access own share
 * searches via a socket-like file (see /dosearch script)
+* chat via file
 
 TODO:
 * support multiple root share directories
-* chat in file
 * list current transfers in /transfer-file
+* run hashing in background
+* file to initiate reloading of share
 

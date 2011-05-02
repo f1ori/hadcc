@@ -30,5 +30,5 @@ FEATURES:
 TODO:
 * support multiple root share directories
 * chat in file
-* answer search request with results from own share (needs index for at least hashes?)
+* list current transfers in /transfer-file
 

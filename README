@@ -1,3 +1,19 @@
+ABOUT:
+
+This is a DC Client, implementing most of the Direct Connect Protocol.
+
+It maps the shares of other members of your DC network directly into your
+filesystem. You can download files with common filesystem tools like cp or
+stream it directly in your favorite viewer (e. g. mplayer).
+
+
+REQUIREMENTS:
+
+* ghc
+* cabal-install
+* fuse >2.8
+
+
 HOW TO RUN:
 
 install missing libraries with "cabal install libx"
@@ -10,6 +26,7 @@ $ ./dist/build/hadcc/hadcc
 browse the directory, you specified in the config
 $ fusermount -u mointpoint
 
+
 HOW TO INSTALL:
 
 install missing libraries with "cabal install libx"
@@ -17,6 +34,7 @@ install missing libraries with "cabal install libx"
 $ runhaskell Setup.lhs configure --prefix=$HOME --user
 $ runhaskell Setup.lhs build
 $ runhaskell Setup.lhs install
+
 
 FEATURES:
 * online nicks as directory list
@@ -28,9 +46,10 @@ FEATURES:
 * searches via a socket-like file (see /dosearch script)
 * chat via file
 
+
 TODO:
-* support multiple root share directories
-* list current transfers in /transfer-file
+* support multiple root share directories (currently only with symlinks)
+* list current transfers in some file
 * run hashing in background
-* file to initiate reloading of share
+* option to initiate reloading of share
 

@@ -10,6 +10,7 @@ import System.Log.Logger
 import System.Log.Handler.Simple
 import Config
 import Filelist
+import FilelistTypes
 import TTH
 import DCCommon
 import DCToHub
@@ -19,8 +20,11 @@ import FilesystemHandler
 
 start appState = do
     let config = appConfig appState
-    forkIO $ startDCServer (configMyIp config) (configMyPort config) (ToClient Nothing DontKnow) (startupClient appState) (handleClient appState)
-    forkIO $ openDCConnection (configHubIp config) (configHubPort config) ToHub (startupHub appState) (handleHub appState)
+    searchSocket <- createSearchSocket
+    forkIO $ startDCServer (configMyIp config) (configMyPort config) (ToClient Nothing DontKnow)
+                           (startupClient appState) (handleClient appState)
+    forkIO $ openDCConnection (configHubIp config) (configHubPort config) ToHub
+                              (startupHub appState) (handleHub appState searchSocket)
     return ()
     
 stop appState = return ()
@@ -29,10 +33,10 @@ main = do
     config <- loadConfig "Hadcc.cfg"
     appState <- newAppState config
     loadTTHCache appState "Hadcc.cache"
-    putMVar (appFileTree appState) =<< getFileList appState (configShareDir config)
-    withMVar (appFileTree appState) (\tree -> putStrLn $ treeNodeToXml tree)
+    putMVar (appFileTree appState) =<< newIndexedFileTree =<< getFileList appState (configShareDir config)
+    --withMVar (appFileTree appState) (\tree -> putStrLn $ treeNodeToXml tree)
     hashFileList appState
-    withMVar (appFileTree appState) (\tree -> putStrLn $ treeNodeToXml tree)
+    --withMVar (appFileTree appState) (\tree -> putStrLn $ treeNodeToXml tree)
     startupFileSystem (configMountpoint config) (start appState) (stop appState) (dcFileInfo appState)
 
 -- vim: sw=4 expandtab

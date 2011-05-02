@@ -224,7 +224,7 @@ dcFileInfo appState path = do
 
           | (take 8 path) == "/myshare" -> do
 	      let subpath = drop 8 path
-              myShare <- readMVar $ appFileTree appState
+              IndexedFileTree myShare htable <- readMVar $ appFileTree appState
               treeNodeFsHandler myshareContentHandler myShare ugid subpath
 
 	  | otherwise -> return Nothing

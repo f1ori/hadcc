@@ -27,6 +27,7 @@ import Control.Exception as E
 import Config
 import TTHTypes
 import FilelistTypes
+import Data.HashTable
 
 loadTTHCache :: AppState -> FilePath -> IO ()
 loadTTHCache appState cacheFile = do
@@ -55,16 +56,18 @@ setHashInCache appState path hash = do
 -- | calc hash for every file in fileTree, of not present
 hashFileList :: AppState -> IO ()
 hashFileList appState = do
-    tree <- readMVar (appFileTree appState)
+    IndexedFileTree tree htable <- readMVar (appFileTree appState)
     traverse appState [] tree
     where
         traverse :: AppState -> [String] -> TreeNode -> IO ()
         traverse appState dirs (DirNode name _ children) = mapM_ (traverse appState (name:dirs)) children
         traverse appState dirs (FileNode _ _ _ _ (Just hash)) = return ()
-        traverse appState dirs (FileNode name path _ _ Nothing) = do
+        traverse appState dirs node@(FileNode name path _ _ Nothing) = do
 	    hash <- getHashForFile path
 	    setHashInCache appState path hash
-	    modifyMVar_ (appFileTree appState) (\n -> return $! setHash hash (reverse (name:dirs)) n)
+	    modifyMVar_ (appFileTree appState) (\(IndexedFileTree tree htable) -> do
+                insert htable hash node
+                return $! IndexedFileTree (setHash hash (reverse (name:dirs)) tree) htable)
 
         setHash :: String -> [String] -> TreeNode -> TreeNode
         setHash hash [name] file@(FileNode fname _ _ _ _)

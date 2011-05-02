@@ -24,12 +24,16 @@ import FixedQueue
 import FixedQueueTypes
 import Config
 import Search
+import Udp
+
+createSearchSocket :: IO Socket
+createSearchSocket = fst `liftM` initUdpServer
 
 startupHub :: AppState -> Handle -> IO ()
 startupHub appState h = putMVar (appHubHandle appState) h -- save handle for syncronisation
 
-handleHub :: AppState -> Handle -> ConnectionState -> String -> IO ConnectionState
-handleHub appState h conState msg = do
+handleHub :: AppState -> Socket -> Handle -> ConnectionState -> String -> IO ConnectionState
+handleHub appState searchSocket h conState msg = do
     case getCmd msg of
         Just "$Lock"    -> do
                                withMVar (appHubHandle appState) $ \hubHandle -> do
@@ -83,6 +87,27 @@ handleHub appState h conState msg = do
 	                       putStrLn ("Connect to me " ++ hostport)
 			       forkIO $ openDCConnection host port (ToClient Nothing DontKnow)
 			                                 (startupClient appState) (handleClient appState)
+			       return conState
+        Just "$Search" -> do
+                               let (response, search) = dcToSearch $ T.pack msg
+                               let hub = (configHubIp $ appConfig appState) ++ ":" ++ (configHubPort $ appConfig appState)
+                               putStrLn $ show search
+                               if (take 4 response) == "Hub:"
+                                   then do
+                                       -- passive search
+                                       let sendnick = drop 4 response
+                                       putStrLn sendnick
+                                       results <- searchInDb appState search
+                                       mapM_ putStrLn $ map (searchResultToDc hub $ Just sendnick) results
+                                       withMVar (appHubHandle appState) $ \hubHandle -> do
+                                           mapM_ (hPutStr hubHandle) $ map (searchResultToDc hub $ Just sendnick) results
+			                   hFlush hubHandle
+                                   else do
+                                       let ip = takeWhile (/=':') response
+                                       let port = read $ tail $ dropWhile (/=':') response
+                                       results <- searchInDb appState search
+                                       mapM_ putStrLn $ map (searchResultToDc hub Nothing) results
+                                       mapM_ (sendUdp searchSocket ip port) $ map (searchResultToDc hub Nothing) results
 			       return conState
         Nothing         -> do
 	                       putStrLn "No Command:"

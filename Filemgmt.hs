@@ -25,7 +25,7 @@ dcFilelist = "files.xml.bz2"
 -- | get size value of file object in tree
 getFileSize :: AppState -> String -> IO (Maybe Integer)
 getFileSize appState path = do
-    fileTree <- readMVar $ appFileTree appState
+    IndexedFileTree fileTree htable <- readMVar $ appFileTree appState
     case path of
         path | dcFilelist == path      -> return $ Just (fromIntegral $ L.length (treeNodeToXmlBz fileTree))
              | "TTH/" == (take 4 path) -> returnFileSize (searchHash (drop 4 path) fileTree)
@@ -40,7 +40,7 @@ getFileSize appState path = do
 -- | get file content of file object in tree
 getFileContent :: AppState -> String -> Integer -> IO (Maybe L.ByteString)
 getFileContent appState path offset = do
-    fileTree <- readMVar $ appFileTree appState
+    IndexedFileTree fileTree htable <- readMVar $ appFileTree appState
     case path of
         path | dcFilelist == path      -> return $ Just (treeNodeToXmlBz fileTree)
              | "TTH/" == (take 4 path) -> returnStream (searchHash (drop 4 path) fileTree)

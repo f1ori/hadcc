@@ -46,7 +46,7 @@ data AppState = AppState {
     -- | the static configuration
       appConfig :: AppConfig
     -- | own share
-    , appFileTree :: MVar TreeNode
+    , appFileTree :: MVar IndexedFileTree
     -- | job for the nicks, a file to download
     , appJobs :: TVar (M.Map Nick DcJob)
     -- | filelists of nicks to transfer it to other function/thread (TODO remove)

@@ -19,6 +19,9 @@ import FilelistTypes
 import Filelist
 import DCToClient
 
+
+-- | download filelist of some user.
+-- | the filelist will be cached, so the next request should be fast
 getFilelistCached :: AppState -> Nick -> IO TreeNode
 getFilelistCached appState nick = do
     result <- atomically $ do

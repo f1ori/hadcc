@@ -13,11 +13,13 @@ initUdpServer = withSocketsDo $ do
     port <- socketPort sock
     return (sock, port)
 
+-- | wait for UDP-Packet
 receiveUdp :: Socket -> IO String
 receiveUdp sock = do
     (msg, _, addr) <- recvFrom sock 1024
     return msg
 
+-- | send UDP-Packet to ip:port via a socket
 sendUdp :: Socket -> String -> Integer -> String -> IO ()
 sendUdp sock ip port str = do
     host <- inet_addr ip

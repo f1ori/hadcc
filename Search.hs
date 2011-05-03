@@ -43,6 +43,7 @@ data SearchResult = SearchResult {
     }
     deriving (Show)
 
+-- | escape search pattern for dc
 escapePattern :: String -> String
 escapePattern (' ':xs) = '$':(escapePattern xs)
 escapePattern ('|':xs) = '$':(escapePattern xs)
@@ -50,6 +51,7 @@ escapePattern ('?':xs) = '$':(escapePattern xs)
 escapePattern (x:xs)   =  x :(escapePattern xs)
 
 
+-- | construct simple search with pattern
 simpleSearch :: T.Text -> Search
 simpleSearch str = Search {
       searchSizeRestricted = False
@@ -60,6 +62,7 @@ simpleSearch str = Search {
     , searchHash = ""
     }
 
+-- | construct simple search for TTH
 tthSearch :: String -> Search
 tthSearch tth = Search {
       searchSizeRestricted = False
@@ -70,6 +73,7 @@ tthSearch tth = Search {
     , searchHash = tth
     }
 
+-- | construct valid dc msg from search object
 searchToDC :: Search -> String
 searchToDC search = printf "%c?%c?%d?%d?%s"
                         (boolToDc $ searchSizeRestricted search)
@@ -117,6 +121,7 @@ dcToSearchResult msg = SearchResult {
         space = T.pack " "
         five  = T.pack ['\x5']
 
+-- | construct valid dc command from SearchResult
 searchResultToDc :: String -> Maybe String -> SearchResult -> String
 searchResultToDc hub passiveUser searchResult = if (srFile searchResult) /= ""
     then printf "$SR %s %s%c%d %d/%d%c%s%s (%s)%s|"
@@ -146,6 +151,7 @@ searchResultToDc hub passiveUser searchResult = if (srFile searchResult) /= ""
         five :: Char
         five = '\x5'
 
+-- | parse a dc search command (with $Search)
 dcToSearch :: T.Text -> (String, Search)
 dcToSearch msg = (T.unpack response, Search {
       searchSizeRestricted = sizeRestricted
@@ -180,6 +186,7 @@ dcToSearch msg = (T.unpack response, Search {
         space = T.pack " "
         unescape str = T.strip $ T.replace (T.pack "$") (T.pack " ") str
 
+-- | pretty print search result
 printSearchResult :: SearchResult -> String
 printSearchResult sr = printf "%s %s %s %s %s\n"
                         (srNick sr)
@@ -196,6 +203,7 @@ prettySize size | size < 1024 = printf "%d B" size
                 | otherwise = printf "%.1f GiB" (((fromInteger size)/1024.0/1024.0/1024.0)::Double)
 
 
+-- | execute search in local filelist
 searchInDb :: AppState -> Search -> IO [SearchResult]
 searchInDb appState search = do
     let nick = configNick $ appConfig appState

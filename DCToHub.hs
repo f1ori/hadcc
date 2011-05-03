@@ -119,12 +119,14 @@ handleHub appState searchSocket h conState msg = do
 	                       putStrLn msg
 			       return conState
 
+-- | make search request on hub
 searchDC :: AppState -> PortNumber -> Search -> IO ()
 searchDC appState udpPort search = do
     let searchstring = searchToDC search
     withMVar (appHubHandle appState) $ \hubHandle -> do
         sendCmd hubHandle "Search" ((configMyIp $ appConfig appState) ++ ":" ++ (show udpPort) ++ " " ++ searchstring)
 
+-- | send chat msg to hub
 sendChatMsg :: AppState -> T.Text -> IO ()
 sendChatMsg appState msg = do
     let nick = configNick $ appConfig appState

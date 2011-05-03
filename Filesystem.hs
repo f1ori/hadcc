@@ -20,29 +20,37 @@ import Control.Monad
 
 
 type FsObject = (FileStat, FsContent)
+-- | filesystem entry
 data FsContent = FsDir (IO [FilePath])
                | FsFile (OpenMode -> IO (Either Errno (ReadFunc, Maybe WriteFunc, CloseFunc))) FuseOpenInfo
 
+-- | function, that provides the content of the filesystem
 type FileInfoHandler = FilePath -> IO (Maybe FsObject)
 
+-- | type signatures of read function
 type ReadFunc = Integer -> Integer -> IO B.ByteString
+-- | type signatures of write function
 type WriteFunc = B.ByteString -> Integer -> IO ByteCount
+-- | type signatures of close function
 type CloseFunc = IO ()
 
 type FileHandle = (ReadFunc, Maybe WriteFunc, CloseFunc)
 type UserGroupID = (UserID, GroupID)
 
+-- | get user and group id of current user
 getUserGroupID :: IO UserGroupID
 getUserGroupID = do
    uid <- getRealUserID
    gid <- getRealGroupID
    return (uid, gid)
 
+-- helpers for usefull stats
 getStatDir ugid = getStat ugid Directory "rx" 0
 getStatFileR ugid size = getStat ugid RegularFile "r" size
 getStatFileRW ugid size = getStat ugid RegularFile "rw" size
 getStatFileRX ugid size = getStat ugid RegularFile "rx" size
 
+-- | helper for generic file/directory stat
 getStat :: Integral n => UserGroupID -> EntryType -> String -> n -> FileStat
 getStat (uid, gid) entryType fileModeStr size = FileStat
     { statEntryType = entryType
@@ -65,6 +73,7 @@ getStat (uid, gid) entryType fileModeStr size = FileStat
        chrToFileMode _   = nullFileMode
 
 
+-- | fuse open handler
 fsOpen :: FileInfoHandler -> FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno (FuseOpenInfo, FileHandle))
 fsOpen infoHandler path mode flags = do
     object <- infoHandler path
@@ -80,17 +89,21 @@ fsOpen infoHandler path mode flags = do
         Nothing            -> return $ Left eNOENT
 
 
+-- | fuse read handler
 fsRead :: FilePath -> FileHandle -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
 fsRead path (readFunc, _, _) size offset = Right `liftM` readFunc (fromIntegral size) (fromIntegral offset)
 
+-- | fuse write handler
 fsWrite :: FilePath -> FileHandle -> B.ByteString -> FileOffset -> IO (Either Errno ByteCount)
 fsWrite path (_, writeFunc, _) stuff offset = case writeFunc of
    Just writeF -> Right `liftM` writeF stuff (fromIntegral offset)
    Nothing     -> return $ Left eACCES
 
+-- | fuse release (close systemcall) handler
 fsRelease :: FilePath -> FileHandle -> IO ()
 fsRelease path (_, _, closeFunc) = closeFunc
 
+-- | fuse opendir handler
 fsOpenDir :: FileInfoHandler -> FilePath -> IO Errno
 fsOpenDir infoHandler path = do
     result <- fsReadDir infoHandler path
@@ -99,6 +112,7 @@ fsOpenDir infoHandler path = do
         Left errno -> return errno
 
 
+-- | fuse readdir handler
 fsReadDir :: FileInfoHandler -> FilePath -> IO (Either Errno [(FilePath, FileStat)])
 fsReadDir infoHandler path = do
     ugid <- getUserGroupID
@@ -119,10 +133,12 @@ fsReadDir infoHandler path = do
             return stat
 
 
+-- | fuse releasedir handler
 fsReleaseDir :: FileInfoHandler -> FilePath -> IO Errno
 fsReleaseDir infoHandler path = do
     return eOK
 
+-- | fuse getstat handler
 fsGetStat :: FileInfoHandler -> FilePath -> IO (Either Errno FileStat)
 fsGetStat infoHandler path = do
     info <- infoHandler path

@@ -109,7 +109,9 @@ textContentHandler text = FsFile openF openInfo
         openF _        = return $ Left eACCES
         readText size offset = return $ (B.take (fromIntegral size) $ B.drop (fromIntegral offset) (B.pack text))
 
--- | check function in interval (in microseconds)
+-- | interrupt workFunc every interval microseconds and check
+-- | value of checkFunc, if True return Nothing
+-- | otherwise return result of workFunc
 checkFuncOnInterval :: Int -> IO Bool -> IO a -> IO ( Maybe a)
 checkFuncOnInterval interval checkFunc workFunc = do
     result <- timeout interval workFunc
@@ -143,6 +145,7 @@ searchContentHandler appState = FsFile openF openInfo
             searchDC appState port (simpleSearch $ E.decodeUtf8 content)
             return $ fromIntegral $ B.length content
 
+-- | content handler for chat file
 chatContentHandler :: AppState -> FsContent
 chatContentHandler appState = FsFile openF openInfo
     where

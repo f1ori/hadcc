@@ -15,6 +15,7 @@ import Foreign.C.Types
 import Data.HashTable
 import Control.Monad
 
+-- | filelist entry, a main datastructure of hadcc
 data TreeNode = DirNode  {
                        dirNodeName     :: String
                      , dirNodePath     :: FilePath
@@ -31,12 +32,15 @@ data TreeNode = DirNode  {
 
 instance NFData CTime
 
+-- deepseq stuff
 instance NFData TreeNode where
     rnf (DirNode name path children) = rnf name `seq` rnf path `seq` rnf children
     rnf (FileNode name path size modTime hash) = rnf name `seq` rnf path `seq` rnf size `seq` rnf modTime `seq` rnf hash
 
+-- | Filelist with index on tth-hashes
 data IndexedFileTree = IndexedFileTree TreeNode (HashTable String TreeNode)
 
+-- | create IndexedFileTree from TreeNode and fill the index
 newIndexedFileTree :: TreeNode -> IO IndexedFileTree
 newIndexedFileTree tree = IndexedFileTree tree `liftM` fromList hashString (treeToHashList tree)
     where

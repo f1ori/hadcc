@@ -9,8 +9,9 @@ module TTHTypes where
 
 import System.Posix.Types
 import qualified Data.Map as M
+import qualified Data.Text as T
 
 -- hash and modification date as values
-type TTHCache = M.Map FilePath (String, EpochTime)
+type TTHCache = M.Map T.Text (T.Text, EpochTime)
 
 -- vim: sw=4 expandtab

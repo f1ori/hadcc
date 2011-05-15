@@ -16,6 +16,7 @@ import Control.Monad
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Codec.Compression.BZip as BZip
+import qualified Data.Text as T
 import Text.XML.Expat.SAX
 import Data.List
 
@@ -35,7 +36,7 @@ getFileList appState dir = do
 	          then getFileList appState path
 	          else getFile appState path
 	     )
-    return (DirNode (last (splitDirectories dir)) dir nodes)
+    return (DirNode (T.pack $ last (splitDirectories dir)) (T.pack dir) nodes)
 
 -- | create TreeNode object for file in filesystem (hash is retreived from cache if available)
 getFile :: AppState -> FilePath -> IO TreeNode
@@ -43,8 +44,8 @@ getFile appState path = do
     fileStatus <- getFileStatus path
     let size = fromIntegral $ fileSize fileStatus
     let modTime = modificationTime fileStatus
-    hash <- getCachedHash appState path modTime
-    return ( FileNode (takeFileName path) path size modTime hash )
+    hash <- getCachedHash appState (T.pack path) modTime
+    return ( FileNode (T.pack $ takeFileName path) (T.pack path) size modTime hash )
 
 
 -- | get size of file from filesystem
@@ -56,7 +57,7 @@ getSystemFileSize path = do
     return size
 
 -- | get useful contents of a directory (not . or ..)
-getUsefulContents :: FilePath -> IO [String]
+getUsefulContents :: String -> IO [String]
 getUsefulContents path = do
     names <- getDirectoryContents path
     return (filter (`notElem` [".", ".."]) names)
@@ -75,14 +76,14 @@ firstNotNothing ((Just x):xs) = Just x
 firstNotNothing (Nothing:xs) = firstNotNothing xs
 
 -- | search FileNode in TreeNode by path
-searchFile :: String -> TreeNode -> Maybe TreeNode
+searchFile :: T.Text -> TreeNode -> Maybe TreeNode
 searchFile path tree =
     case searchNode path tree of
         Just (file@(FileNode _ _ _ _ _)) -> Just file
 	_                                -> Nothing
 
 -- | search Node in TreeNode by path
-searchNode :: String -> TreeNode -> Maybe TreeNode
+searchNode :: T.Text -> TreeNode -> Maybe TreeNode
 searchNode path file@(FileNode name _ _ _ _)
         | path == name               = Just file
 	| otherwise                  = Nothing
@@ -91,12 +92,11 @@ searchNode path dir@(DirNode name _ children)
         | (firstPath path) == name   = firstNotNothing $ map (searchNode (restPath path)) children
 	| otherwise                  = Nothing
     where
-	firstPath path = takeWhile (/='/') path
-	restPath (x:xs) | x=='/'    = xs
-	                | otherwise = restPath xs
+	firstPath path = T.takeWhile (/='/') path
+        restPath str = T.tail $ T.dropWhile (/='/') path
 
 -- | search hash in TreeNode
-searchHash :: String -> TreeNode -> Maybe TreeNode
+searchHash :: T.Text -> TreeNode -> Maybe TreeNode
 searchHash hash file@(FileNode _ _ _ _ (Just fhash))
         | fhash == hash                = Just file
 	| otherwise                    = Nothing
@@ -110,11 +110,11 @@ treeNodeToXml node = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" ++
                   "<FileListing Version=\"1\" Generator=\"hdc V:0.1\">" ++ 
                   (toXml node) ++ "</FileListing>"
     where
-        toXml (DirNode name _ children)            = "<Directory Name=\"" ++ (xmlQuote name) ++ "\">" ++
+        toXml (DirNode name _ children)            = "<Directory Name=\"" ++ (xmlQuote $ T.unpack name) ++ "\">" ++
 	                                             (concat $ map toXml children) ++ "</Directory>"
-        toXml (FileNode name _ size _ (Just hash)) = "<File Name=\"" ++ (xmlQuote name) ++ "\" Size=\"" ++
-	                                             (show size) ++ "\" TTH=\"" ++ hash ++ "\"/>"
-        toXml (FileNode name _ size _ _)           = "<File Name=\"" ++ (xmlQuote name) ++ "\" Size=\"" ++
+        toXml (FileNode name _ size _ (Just hash)) = "<File Name=\"" ++ (xmlQuote $ T.unpack name) ++ "\" Size=\"" ++
+	                                             (show size) ++ "\" TTH=\"" ++ (T.unpack hash) ++ "\"/>"
+        toXml (FileNode name _ size _ _)           = "<File Name=\"" ++ (xmlQuote $ T.unpack name) ++ "\" Size=\"" ++
 	                                             (show size) ++ "\"/>"
 	xmlQuote [] = []
 	xmlQuote ('"':xs) = "&quot;" ++ (xmlQuote xs)
@@ -130,33 +130,35 @@ xmlBzToTreeNode :: L.ByteString -> TreeNode
 xmlBzToTreeNode xmlbz = (xmlToTreeNode . BZip.decompress) xmlbz
 
 -- | helper function, to extract attribute value from attributelist
-getAttr :: [(String, String)] -> String -> String
-getAttr attrs name = fromJust $ lookup name attrs
+getAttr :: [(T.Text, T.Text)] -> String -> T.Text
+getAttr attrs name = fromJust $ lookup (T.pack name) attrs
 
 -- | helper function to add a node to a directory
 addToDir :: TreeNode -> TreeNode -> TreeNode
 addToDir node (DirNode name path children) = DirNode name path (node:children)
 
 -- | parse tagsoup tag on TreeNode stack
-processXmlTag :: [TreeNode] -> SAXEvent String String -> [TreeNode]
-processXmlTag result       (XMLDeclaration _ _ _)        = result
-processXmlTag result       (StartElement "FileListing" attrs) = [DirNode "base" "" []] 
-processXmlTag result       (StartElement "Directory" attrs)   = (DirNode (getAttr attrs "Name") "" []) : result
-processXmlTag (dir:result) (StartElement "File" attrs)        = let
-                                                           file = FileNode (getAttr attrs "Name") ""
-                                                                           (read $ getAttr attrs "Size") 0
+processXmlTag :: [TreeNode] -> SAXEvent T.Text T.Text -> [TreeNode]
+processXmlTag result (XMLDeclaration _ _ _) = result
+processXmlTag result (StartElement tag attrs)
+                           | tag == (T.pack "FileListing") = [DirNode (T.pack "base") T.empty []] 
+                           | tag == (T.pack "Directory")   = (DirNode (getAttr attrs "Name") T.empty []) : result
+                           | tag == (T.pack "File")        = let file = FileNode (getAttr attrs "Name") T.empty 
+                                                                           (read $ T.unpack $ getAttr attrs "Size") 0
                                                                            (Just $ getAttr attrs "TTH")
-                                                           in (addToDir file dir):result
-processXmlTag result               (EndElement "File")        = result
-processXmlTag (node:parent:result) (EndElement "Directory")   = (addToDir node parent) : result
-processXmlTag result               (EndElement "FileListing") = result
-processXmlTag result               (CharacterData _)          = result
-processXmlTag result               (StartCData)             = result
-processXmlTag result               (EndCData)               = result
-processXmlTag result               (ProcessingInstruction _ _) = result
-processXmlTag result               (Comment _)                 = result
-processXmlTag result               (FailDocument msg)         = error ("parsing error: " ++ (show msg))
-processXmlTag result               tag                      = error ("unknown tag: " ++ (show tag))
+                                                           in (addToDir file (head result)) : (tail result)
+                           | otherwise = error ("unknown tag: " ++ (show tag))
+processXmlTag result (EndElement tag)
+                           | tag == (T.pack "File") = result
+                           | tag == (T.pack "Directory") = addToDir (result !! 0) (result !! 1) : (tail $ tail result)
+                           | tag == (T.pack "FileListing") = result
+                           | otherwise = error ("unknown close tag: " ++ (show tag))
+processXmlTag result (CharacterData _)           = result
+processXmlTag result (StartCData)                = result
+processXmlTag result (EndCData)                  = result
+processXmlTag result (ProcessingInstruction _ _) = result
+processXmlTag result (Comment _)                 = result
+processXmlTag result (FailDocument msg)          = error ("parsing error: " ++ (show msg))
         
 
 -- | convert xml to TreeNode object
@@ -166,7 +168,7 @@ xmlToTreeNode xml = head $ foldl' processXmlTag [] (parseHere xml)
 parseHere xml = (parse defaultParseOptions xml)
 
 -- | get name of TreeNode object (directory name or filename)
-nodeToName :: TreeNode -> String
+nodeToName :: TreeNode -> T.Text
 nodeToName (DirNode name _ _) = name
 nodeToName (FileNode name _ _ _ _) = name
 

@@ -54,7 +54,7 @@ shareContentHandler appState nick (FileNode _ _ _ _ (Just hash)) = FsFile openF 
         openF ReadOnly = do
             finishedMVar <- newEmptyMVar
             contentMVar <- newEmptyMVar
-            downloadFile appState (downloadHandler finishedMVar contentMVar) nick ("TTH/" ++ hash)
+            downloadFile appState (downloadHandler finishedMVar contentMVar) nick ("TTH/" ++ (T.unpack hash))
             result <- timeout peer_timeout $ readMVar contentMVar 
             case result of
                 Just _ -> return $ Right (readF contentMVar, Nothing, closeF finishedMVar)
@@ -81,7 +81,7 @@ shareContentHandler appState nick (FileNode _ _ _ _ (Just hash)) = FsFile openF 
 
 -- | file content handler, providing data from local share
 myshareContentHandler :: TreeNode -> FsContent
-myshareContentHandler (FileNode _ path _ _ _) = FsFile (openF path) openInfo
+myshareContentHandler (FileNode _ path _ _ _) = FsFile (openF $ T.unpack path) openInfo
     where
         openInfo = FuseOpenInfo {
                      fsDirectIo = False
@@ -175,12 +175,12 @@ chatContentHandler appState = FsFile openF openInfo
 -- | filesystem handler providing directory structure of TreeNode
 treeNodeFsHandler :: (TreeNode -> FsContent) -> TreeNode -> UserGroupID -> FileInfoHandler
 treeNodeFsHandler contentHandler (DirNode name _ _) ugid "" = do
-    return $! Just (getStatDir ugid, FsDir (return [name]))
+    return $! Just (getStatDir ugid, FsDir (return [T.unpack name]))
 treeNodeFsHandler contentHandler tree ugid path = do
     let searchpath = drop 1 path -- drop leading directory slash
-    case searchNode searchpath tree of
+    case searchNode (T.pack searchpath) tree of
         Just node@(FileNode _ _ size _ _) -> return $! Just (getStatFileR ugid size, contentHandler node)
-        Just (DirNode _ _ children)       -> return $! Just (getStatDir ugid, FsDir (return $ map nodeToName children))
+        Just (DirNode _ _ children)       -> return $! Just (getStatDir ugid, FsDir (return $ map (T.unpack.nodeToName) children))
         Nothing                           -> return Nothing
 
 -- | filesystem handler providing base structure

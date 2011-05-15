@@ -210,7 +210,7 @@ searchInDb appState search = do
     IndexedFileTree tree htable <- readMVar $ appFileTree appState
     if isTTHSearch
         then do
-             node <- H.lookup htable (searchHash search)
+             node <- H.lookup htable (T.pack $ searchHash search)
              return $ map (nodeToResult nick) $ maybeToList node
         else return $ map (nodeToResult nick) $ take 5 $ filter (matchReg regex) (toList tree)
     where
@@ -226,26 +226,26 @@ searchInDb appState search = do
         matchReg :: [Regex] -> TreeNode -> Bool
         matchReg [] node = True
         matchReg (regex:regexes) node@(FileNode name _ _ _ _)
-            | isJust $ matchRegex regex name = matchReg regexes node
+            | isJust $ matchRegex regex (T.unpack name) = matchReg regexes node
             | otherwise = False
         matchReg (regex:regexes) node@(DirNode name _ _)
-            | isJust $ matchRegex regex name = matchReg regexes node
+            | isJust $ matchRegex regex (T.unpack name) = matchReg regexes node
             | otherwise = False
 
         nodeToResult :: Nick -> TreeNode -> SearchResult
         nodeToResult nick (FileNode name path size _ hash) = SearchResult {
                   srNick = nick
-                , srFile = name
+                , srFile = (T.unpack name)
                 , srPath = ""
                 , srSize = size
                 , srFreeSlots = 10
                 , srTotalSlots = 10
-                , srHash = fromMaybe "" hash
+                , srHash = T.unpack $ fromMaybe T.empty hash
                 }
         nodeToResult nick (DirNode name path _) = SearchResult {
                   srNick = nick
                 , srFile = ""
-                , srPath = name
+                , srPath = (T.unpack name)
                 , srSize = 0
                 , srFreeSlots = 10
                 , srTotalSlots = 10

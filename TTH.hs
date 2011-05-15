@@ -18,6 +18,7 @@ import Data.Digest.TigerHash.ByteString
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString as B
 import qualified Data.Map as M
+import qualified Data.Text as T
 import System.Posix.Types
 import System.Posix.Files
 import System.Directory
@@ -35,7 +36,7 @@ loadTTHCache appState cacheFile = do
         ((E.evaluate . read) =<< readFile cacheFile)
         (\e -> return M.empty)
 
-getCachedHash :: AppState -> FilePath -> EpochTime -> IO (Maybe String)
+getCachedHash :: AppState -> T.Text -> EpochTime -> IO (Maybe T.Text)
 getCachedHash appState path curModTime = withMVar (appTTHCache appState) $ \cache -> do
     case M.lookup path cache of
         Just (hash, modTime) -> if modTime == curModTime
@@ -43,9 +44,9 @@ getCachedHash appState path curModTime = withMVar (appTTHCache appState) $ \cach
 				else return Nothing
 	Nothing -> return Nothing
 
-setHashInCache :: AppState -> FilePath -> String -> IO ()
+setHashInCache :: AppState -> T.Text -> T.Text -> IO ()
 setHashInCache appState path hash = do
-    fileStatus <- getFileStatus path
+    fileStatus <- getFileStatus (T.unpack path)
     let modTime = modificationTime fileStatus
     newCache <- modifyMVar (appTTHCache appState) (\cache -> return $! double $ M.insert path (hash, modTime) cache)
     writeFile "Hadcc.cache" (show newCache)
@@ -59,7 +60,7 @@ hashFileList appState = do
     IndexedFileTree tree htable <- readMVar (appFileTree appState)
     traverse appState [] tree
     where
-        traverse :: AppState -> [String] -> TreeNode -> IO ()
+        traverse :: AppState -> [T.Text] -> TreeNode -> IO ()
         traverse appState dirs (DirNode name _ children) = mapM_ (traverse appState (name:dirs)) children
         traverse appState dirs (FileNode _ _ _ _ (Just hash)) = return ()
         traverse appState dirs node@(FileNode name path _ _ Nothing) = do
@@ -69,7 +70,7 @@ hashFileList appState = do
                 insert htable hash node
                 return $! IndexedFileTree (setHash hash (reverse (name:dirs)) tree) htable)
 
-        setHash :: String -> [String] -> TreeNode -> TreeNode
+        setHash :: T.Text -> [T.Text] -> TreeNode -> TreeNode
         setHash hash [name] file@(FileNode fname _ _ _ _)
 	    | name == fname = file {fileNodeHash = Just hash}
 	    | otherwise     = file
@@ -78,10 +79,10 @@ hashFileList appState = do
 	    | otherwise      = dir
 
 
-getHashForFile :: FilePath -> IO String
+getHashForFile :: T.Text -> IO T.Text
 getHashForFile path = do
-    content <- L.readFile path
-    return $! filter (/='=') $ b32TigerHash (tigerTreeHash content)
+    content <- L.readFile (T.unpack path)
+    return $! T.filter (/='=') $ T.pack $ b32TigerHash (tigerTreeHash content)
 
 -- test with runhaskell tth.hs tth file.ext
 --main = liftM (!!1) getArgs >>= getHashForFile >>= putStrLn

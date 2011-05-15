@@ -14,19 +14,20 @@ import Control.DeepSeq
 import Foreign.C.Types
 import Data.HashTable
 import Control.Monad
+import qualified Data.Text as T
 
 -- | filelist entry, a main datastructure of hadcc
 data TreeNode = DirNode  {
-                       dirNodeName     :: String
-                     , dirNodePath     :: FilePath
+                       dirNodeName     :: T.Text
+                     , dirNodePath     :: T.Text
                      , dirNodeChildren :: [TreeNode]
                      }
           | FileNode {
-                       fileNodeName    :: String
-                     , fileNodePath    :: FilePath
+                       fileNodeName    :: T.Text
+                     , fileNodePath    :: T.Text
                      , fileNodeSize    :: Integer
                      , fileNodeModTime :: EpochTime
-                     , fileNodeHash    :: Maybe String
+                     , fileNodeHash    :: Maybe T.Text
                      }
             deriving (Eq, Show)
 
@@ -38,16 +39,17 @@ instance NFData TreeNode where
     rnf (FileNode name path size modTime hash) = rnf name `seq` rnf path `seq` rnf size `seq` rnf modTime `seq` rnf hash
 
 -- | Filelist with index on tth-hashes
-data IndexedFileTree = IndexedFileTree TreeNode (HashTable String TreeNode)
+data IndexedFileTree = IndexedFileTree TreeNode (HashTable T.Text TreeNode)
 
 -- | create IndexedFileTree from TreeNode and fill the index
 newIndexedFileTree :: TreeNode -> IO IndexedFileTree
-newIndexedFileTree tree = IndexedFileTree tree `liftM` fromList hashString (treeToHashList tree)
+newIndexedFileTree tree = IndexedFileTree tree `liftM` fromList hashText (treeToHashList tree)
     where
-        treeToHashList :: TreeNode -> [(String, TreeNode)]
+        treeToHashList :: TreeNode -> [(T.Text, TreeNode)]
         treeToHashList (DirNode _ _ children) = concat $ map treeToHashList children
         treeToHashList node@(FileNode _ _ _ _ (Just hash)) = [(hash, node)]
         treeToHashList node@(FileNode _ _ _ _ Nothing) = []
 
+hashText = hashString . T.unpack
 
 -- vim: sw=4 expandtab

@@ -5,7 +5,9 @@
 --- License     : GPL
 ---
 
-module FilesystemHandler where
+module FilesystemHandler (
+      dcFileInfo
+    ) where
 
 import System.IO
 import System.Fuse
@@ -33,6 +35,8 @@ import DCToClient
 import DCToHub
 import Udp
 import Search
+import Filemgmt
+import TTH
 
 peer_timeout = 2000000
 
@@ -172,6 +176,25 @@ chatContentHandler appState = FsFile openF openInfo
             sendChatMsg appState (E.decodeUtf8 content)
             return $ fromIntegral $ B.length content
 
+-- | reload local share on open
+reloadShareContentHandler :: AppState -> FsContent
+reloadShareContentHandler appState = FsFile openF openInfo
+    where
+        openF WriteOnly = do
+            reloadOwnShare appState
+            hashFileList appState
+            return $ Right (readF, Just writeF, return ())
+        openF _         = return $ Left eACCES
+
+            -- do the chit
+        openInfo = FuseOpenInfo {
+                     fsDirectIo = True
+                   , fsKeepCache = False
+                   , fsNonseekable = True
+                   }
+        readF size offset = return $ B.pack ""
+        writeF content offset = return $ fromIntegral $ B.length content
+
 -- | filesystem handler providing directory structure of TreeNode
 treeNodeFsHandler :: (TreeNode -> FsContent) -> TreeNode -> UserGroupID -> FileInfoHandler
 treeNodeFsHandler contentHandler (DirNode name _ _) ugid "" = do
@@ -190,7 +213,8 @@ dcFileInfo appState path = do
     ugid <- getUserGroupID
     case path of
 
-        "/" -> return $ Just (getStatDir ugid, FsDir (return ["nicks", "status", "myshare", "search", "dosearch", "chat"]))
+        "/" -> return $ Just (getStatDir ugid, FsDir
+               (return ["nicks", "status", "myshare", "search", "dosearch", "chat", "reloadshare"]))
 
         "/nicks" -> do
 		    return $ Just (getStatDir ugid, FsDir (M.keys `liftM` readMVar (appNickList appState)))
@@ -202,6 +226,8 @@ dcFileInfo appState path = do
         "/search" -> return $ Just (getStatFileRW ugid 0, (searchContentHandler appState))
 
         "/dosearch" -> return $ Just (getStatFileRX ugid 0, (textContentHandler searchScript))
+
+        "/reloadshare" -> return $ Just (getStatFileRW ugid 0, (reloadShareContentHandler appState))
 
         _ | (take 7 path) == "/nicks/" -> do
 	      nicklist <- readMVar (appNickList appState)

@@ -6,7 +6,14 @@
 ---
 
 
-module DCCommon where
+module DCCommon (
+      State(..)
+    , ConnectionState(..)
+    , openDCConnection
+    , startDCServer
+    , getCmd
+    , sendCmd
+    ) where
 
 import Network.Socket
 import System.IO

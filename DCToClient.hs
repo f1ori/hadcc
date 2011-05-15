@@ -5,7 +5,12 @@
 --- License     : GPL
 ---
 
-module DCToClient where
+module DCToClient (
+      startupClient
+    , handleClient
+    , downloadFilelist
+    , downloadFile
+    ) where
 
 import System.IO
 import System.Timeout

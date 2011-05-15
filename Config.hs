@@ -16,6 +16,7 @@ import qualified Data.Map as M
 import Data.ConfigFile
 import Data.Char
 import Data.Either.Utils
+import System.Directory
 import FilelistTypes
 import TTHTypes
 import FixedQueueTypes
@@ -39,6 +40,7 @@ data AppConfig = AppConfig {
     , configShareSize :: String
     , configShareDir :: String
     , configMountpoint :: String
+    , configCacheFile :: FilePath
     }
 
 -- | application state, passed to almost all threads
@@ -72,6 +74,8 @@ loadConfig :: FilePath -> IO AppConfig
 loadConfig configFile = do
     val <- readfile emptyCP configFile
     let cp = forceEither val
+    homedir <- getHomeDirectory
+    let cacheFile = homedir ++ "/.hadcc.cache"
     -- TODO: check welformed (no spaces in nick, numbers, ...)
     return AppConfig {
                    configHubIp = forceEither $ get cp "hub" "ip"
@@ -84,6 +88,7 @@ loadConfig configFile = do
                  , configShareSize = forceEither $ get cp "dc" "sharesize"
                  , configShareDir = forceEither $ get cp "dc" "sharedir"
                  , configMountpoint = forceEither $ get cp "filesystem" "mountpoint"
+                 , configCacheFile = cacheFile
                  }
 
 

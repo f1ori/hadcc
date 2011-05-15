@@ -11,6 +11,7 @@ import System.Log.Handler.Simple
 import Config
 import Filelist
 import FilelistTypes
+import Filemgmt
 import TTH
 import DCCommon
 import DCToHub
@@ -25,6 +26,7 @@ start appState = do
                            (startupClient appState) (handleClient appState)
     forkIO $ openDCConnection (configHubIp config) (configHubPort config) ToHub
                               (startupHub appState) (handleHub appState searchSocket)
+    forkIO $ hashFileList appState
     return ()
     
 stop appState = return ()
@@ -32,10 +34,9 @@ stop appState = return ()
 main = do
     config <- loadConfig "Hadcc.cfg"
     appState <- newAppState config
-    loadTTHCache appState "Hadcc.cache"
-    putMVar (appFileTree appState) =<< newIndexedFileTree =<< getFileList appState (configShareDir config)
+    loadTTHCache appState
+    loadOwnShare appState
     --withMVar (appFileTree appState) (\tree -> putStrLn $ treeNodeToXml tree)
-    hashFileList appState
     --withMVar (appFileTree appState) (\tree -> putStrLn $ treeNodeToXml tree)
     startupFileSystem (configMountpoint config) (start appState) (stop appState) (dcFileInfo appState)
 

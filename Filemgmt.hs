@@ -10,6 +10,8 @@ module Filemgmt (
       getFileSize
     , getFileContent
     , dcFilelist
+    , loadOwnShare
+    , reloadOwnShare
     ) where
 
 import System.IO
@@ -43,11 +45,14 @@ getFileSize appState path = do
 getFileContent :: AppState -> String -> Integer -> IO (Maybe L.ByteString)
 getFileContent appState path offset = do
     IndexedFileTree fileTree htable <- readMVar $ appFileTree appState
+    --putStrLn (show $ treeNodeToXml fileTree)
     case T.pack path of
         path | dcFilelistText == path             -> return $ Just (treeNodeToXmlBz fileTree)
              | (T.pack "TTH/") == (T.take 4 path) -> returnStream (searchHash (T.drop 4 path) fileTree)
              | otherwise                          -> returnStream (searchFile path fileTree)
     where
+        returnStream :: Maybe TreeNode -> IO (Maybe L.ByteString)
+        --returnStream node = (return node) >>= (\f-> liftIO $ Just $ getSystemFileContentsWithOffset (T.unpack $ fileNodePath f) offset)
         returnStream node =
             case node of
                 Just f -> do
@@ -62,5 +67,15 @@ getSystemFileContentsWithOffset path offset = do
     h <- openBinaryFile path ReadMode
     hSeek h AbsoluteSeek offset
     L.hGetContents h
+
+loadOwnShare :: AppState -> IO ()
+loadOwnShare appState = do
+    let config = appConfig appState
+    putMVar (appFileTree appState) =<< newIndexedFileTree =<< getFileList appState (configShareDir config)
+
+reloadOwnShare :: AppState -> IO ()
+reloadOwnShare appState = do
+    takeMVar (appFileTree appState)
+    loadOwnShare appState
 
 -- vim: sw=4 expandtab

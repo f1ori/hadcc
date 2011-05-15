@@ -30,10 +30,10 @@ import TTHTypes
 import FilelistTypes
 import Data.HashTable
 
-loadTTHCache :: AppState -> FilePath -> IO ()
-loadTTHCache appState cacheFile = do
+loadTTHCache :: AppState -> IO ()
+loadTTHCache appState = do
     putMVar (appTTHCache appState) =<< Prelude.catch
-        ((E.evaluate . read) =<< readFile cacheFile)
+        ((E.evaluate . read) =<< readFile (configCacheFile $ appConfig appState))
         (\e -> return M.empty)
 
 getCachedHash :: AppState -> T.Text -> EpochTime -> IO (Maybe T.Text)
@@ -49,7 +49,7 @@ setHashInCache appState path hash = do
     fileStatus <- getFileStatus (T.unpack path)
     let modTime = modificationTime fileStatus
     newCache <- modifyMVar (appTTHCache appState) (\cache -> return $! double $ M.insert path (hash, modTime) cache)
-    writeFile "Hadcc.cache" (show newCache)
+    writeFile (configCacheFile $ appConfig appState) (show newCache)
     where
         double a = (a,a)
 
@@ -64,6 +64,7 @@ hashFileList appState = do
         traverse appState dirs (DirNode name _ children) = mapM_ (traverse appState (name:dirs)) children
         traverse appState dirs (FileNode _ _ _ _ (Just hash)) = return ()
         traverse appState dirs node@(FileNode name path _ _ Nothing) = do
+            putStrLn ("hash: " ++ (show path))
 	    hash <- getHashForFile path
 	    setHashInCache appState path hash
 	    modifyMVar_ (appFileTree appState) (\(IndexedFileTree tree htable) -> do

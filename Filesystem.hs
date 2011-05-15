@@ -6,7 +6,21 @@
 --- License     : GPL
 ---
 
-module Filesystem where
+module Filesystem (
+      FsObject
+    , FsContent(..)
+    , FileInfoHandler
+    , ReadFunc
+    , WriteFunc
+    , CloseFunc
+    , UserGroupID
+    , getUserGroupID
+    , getStatDir
+    , getStatFileR
+    , getStatFileRW
+    , getStatFileRX
+    , startupFileSystem
+    ) where
 
 import System.Fuse
 import System.Posix.Types

@@ -19,7 +19,7 @@ import qualified Codec.Compression.BZip as BZip
 import qualified Data.Text as T
 import Text.XML.Expat.SAX
 import Data.List
-
+import Data.Maybe
 import FilelistTypes
 import TTH
 import Config
@@ -33,10 +33,13 @@ getFileList appState dir = do
     nodes <- (forM paths $ \path -> do
 	        isDirectory <- doesDirectoryExist path
 	        if isDirectory
-	          then getFileList appState path
-	          else getFile appState path
+	          then maybeCatch (getFileList appState path)
+	          else maybeCatch (getFile appState path)
 	     )
-    return (DirNode (T.pack $ last (splitDirectories dir)) (T.pack dir) nodes)
+    return (DirNode (T.pack $ last (splitDirectories dir)) (T.pack dir) (catMaybes nodes))
+    where
+        maybeCatch :: IO a -> IO (Maybe a)
+        maybeCatch func = catch (Just `liftM` func) (\e-> return Nothing)
 
 -- | create TreeNode object for file in filesystem (hash is retreived from cache if available)
 getFile :: AppState -> FilePath -> IO TreeNode

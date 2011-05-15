@@ -5,7 +5,13 @@
 --- License     : GPL
 ---
 
-module DCToHub where
+module DCToHub (
+      createSearchSocket
+    , startupHub
+    , handleHub
+    , searchDC
+    , sendChatMsg
+    ) where
 
 import System.IO
 import Control.Concurrent

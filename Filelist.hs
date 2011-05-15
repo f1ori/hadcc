@@ -16,7 +16,8 @@ import Control.Monad
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Codec.Compression.BZip as BZip
-import Text.HTML.TagSoup
+import Text.XML.Expat.SAX
+import Data.List
 
 import FilelistTypes
 import TTH
@@ -137,24 +138,32 @@ addToDir :: TreeNode -> TreeNode -> TreeNode
 addToDir node (DirNode name path children) = DirNode name path (node:children)
 
 -- | parse tagsoup tag on TreeNode stack
-processXmlTag :: [TreeNode] -> Tag String -> [TreeNode]
-processXmlTag result       (TagOpen "FileListing" attrs) = [DirNode "base" "" []] 
-processXmlTag result       (TagOpen "Directory" attrs)   = (DirNode (getAttr attrs "Name") "" []) : result
-processXmlTag (dir:result) (TagOpen "File" attrs)        = let
+processXmlTag :: [TreeNode] -> SAXEvent String String -> [TreeNode]
+processXmlTag result       (XMLDeclaration _ _ _)        = result
+processXmlTag result       (StartElement "FileListing" attrs) = [DirNode "base" "" []] 
+processXmlTag result       (StartElement "Directory" attrs)   = (DirNode (getAttr attrs "Name") "" []) : result
+processXmlTag (dir:result) (StartElement "File" attrs)        = let
                                                            file = FileNode (getAttr attrs "Name") ""
                                                                            (read $ getAttr attrs "Size") 0
                                                                            (Just $ getAttr attrs "TTH")
                                                            in (addToDir file dir):result
-processXmlTag result               (TagClose "File")        = result
-processXmlTag (node:parent:result) (TagClose "Directory")   = (addToDir node parent) : result
-processXmlTag result               (TagClose "FileListing") = result
-processXmlTag result               (TagText _)              = result
-processXmlTag result               (TagComment _)           = result
+processXmlTag result               (EndElement "File")        = result
+processXmlTag (node:parent:result) (EndElement "Directory")   = (addToDir node parent) : result
+processXmlTag result               (EndElement "FileListing") = result
+processXmlTag result               (CharacterData _)          = result
+processXmlTag result               (StartCData)             = result
+processXmlTag result               (EndCData)               = result
+processXmlTag result               (ProcessingInstruction _ _) = result
+processXmlTag result               (Comment _)                 = result
+processXmlTag result               (FailDocument msg)         = error ("parsing error: " ++ (show msg))
+processXmlTag result               tag                      = error ("unknown tag: " ++ (show tag))
         
 
 -- | convert xml to TreeNode object
 xmlToTreeNode :: L.ByteString -> TreeNode
-xmlToTreeNode xml = head $ foldl processXmlTag [] (parseTags (C.unpack xml))
+xmlToTreeNode xml = head $ foldl' processXmlTag [] (parseHere xml)
+
+parseHere xml = (parse defaultParseOptions xml)
 
 -- | get name of TreeNode object (directory name or filename)
 nodeToName :: TreeNode -> String

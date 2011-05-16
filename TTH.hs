@@ -8,13 +8,14 @@
 module TTH 
     (
       getHashForFile
-    , loadTTHCache
+    , initTTHCache
     , getCachedHash
     , hashFileList
     ) where
 
 import Data.Digest.TigerHash
 import Data.Digest.TigerHash.ByteString
+import Data.Maybe
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString as B
 import qualified Data.Map as M
@@ -25,33 +26,61 @@ import System.Directory
 import Control.Monad
 import Control.Concurrent
 import Control.Exception as E
+import Data.HashTable
+import Database.SQLite
+
 import Config
 import TTHTypes
 import FilelistTypes
-import Data.HashTable
 
-loadTTHCache :: AppState -> IO ()
-loadTTHCache appState = do
-    putMVar (appTTHCache appState) =<< Prelude.catch
-        ((E.evaluate . read) =<< readFile (configCacheFile $ appConfig appState))
-        (\e -> return M.empty)
+-- | sqlite table for tth cache
+tthCacheTable = Table "TTHCache" [
+       (Column "Path" (SQLVarChar 255) [IsNullable False])
+     , (Column "TTH" (SQLVarChar 255) [IsNullable False])
+     , (Column "ModTime" (SQLInt BIG True False) [IsNullable False])
+     ] [TablePrimaryKey ["Path"], TableUnique ["Path"]]
 
+
+-- | init sqlite
+initTTHCache :: AppState -> IO ()
+initTTHCache appState = do
+    sqliteHandle <- openConnection (configCacheFile $ appConfig appState)
+    result <- defineTableOpt sqliteHandle True tthCacheTable
+    case result of
+        Just msg -> putStrLn ("create cache table: " ++ msg)
+        Nothing -> return ()
+    putMVar (appSQLiteHandle appState) sqliteHandle
+
+-- | get hash from sqlite cache
 getCachedHash :: AppState -> T.Text -> EpochTime -> IO (Maybe T.Text)
-getCachedHash appState path curModTime = withMVar (appTTHCache appState) $ \cache -> do
-    case M.lookup path cache of
-        Just (hash, modTime) -> if modTime == curModTime
-	                        then return $! Just hash
-				else return Nothing
-	Nothing -> return Nothing
+getCachedHash appState path curModTime = do
+    sqliteHandle <- readMVar (appSQLiteHandle appState)
+    result <- execParamStatement sqliteHandle
+              "SELECT Path, TTH, ModTime FROM TTHCache WHERE Path=:Path"
+              [(":Path", Text $ T.unpack path)]
+    case result of
+        Left msg -> do
+                    putStrLn ("cache database error: " ++ msg)
+                    return Nothing
+        Right rows -> if null rows || (null $ head rows)
+                      then return Nothing
+                      else let row = head $ head rows
+                               path = fromJust $ Prelude.lookup "Path" row
+                               hash = fromJust $ Prelude.lookup "TTH" row
+                               modTime = read $ fromJust $ Prelude.lookup "ModTime" row
+                           in if modTime == curModTime
+                              then return $! Just $ T.pack hash
+                              else return Nothing
 
+-- | set hash in sqlite cache
 setHashInCache :: AppState -> T.Text -> T.Text -> IO ()
 setHashInCache appState path hash = do
     fileStatus <- getFileStatus (T.unpack path)
     let modTime = modificationTime fileStatus
-    newCache <- modifyMVar (appTTHCache appState) (\cache -> return $! double $ M.insert path (hash, modTime) cache)
-    writeFile (configCacheFile $ appConfig appState) (show newCache)
-    where
-        double a = (a,a)
+    sqliteHandle <- readMVar (appSQLiteHandle appState)
+    result <- insertRow sqliteHandle "TTHCache"
+              [("Path", T.unpack path), ("TTH", T.unpack hash), ("ModTime", show modTime)]
+    return ()
 
 
 -- | calc hash for every file in fileTree, of not present
@@ -65,19 +94,20 @@ hashFileList appState = do
         traverse appState dirs (FileNode _ _ _ _ (Just hash)) = return ()
         traverse appState dirs node@(FileNode name path _ _ Nothing) = do
             putStrLn ("hash: " ++ (show path))
-	    hash <- getHashForFile path
-	    setHashInCache appState path hash
-	    modifyMVar_ (appFileTree appState) (\(IndexedFileTree tree htable) -> do
+            hash <- getHashForFile path
+            setHashInCache appState path hash
+            modifyMVar_ (appFileTree appState) (\(IndexedFileTree tree htable) -> do
                 insert htable hash node
                 return $! IndexedFileTree (setHash hash (reverse (name:dirs)) tree) htable)
 
         setHash :: T.Text -> [T.Text] -> TreeNode -> TreeNode
         setHash hash [name] file@(FileNode fname _ _ _ _)
-	    | name == fname = file {fileNodeHash = Just hash}
-	    | otherwise     = file
+            | name == fname = file {fileNodeHash = Just hash}
+            | otherwise     = file
         setHash hash (name:dirs) dir@(DirNode dname _ children)
-	    | name == dname  = dir {dirNodeChildren = map (setHash hash dirs) children}
-	    | otherwise      = dir
+            | name == dname  = dir {dirNodeChildren = map (setHash hash dirs) children}
+            | otherwise      = dir
+        setHash hash rest node = node
 
 
 getHashForFile :: T.Text -> IO T.Text

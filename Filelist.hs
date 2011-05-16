@@ -15,8 +15,11 @@ import Data.Maybe
 import Control.Monad
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C
+import qualified Data.ByteString.Char8 as SC
 import qualified Codec.Compression.BZip as BZip
 import qualified Data.Text as T
+import Data.Text.Encoding (decodeUtf8With)
+import Data.Text.Encoding.Error (lenientDecode)
 import Text.XML.Expat.SAX
 import Data.List
 import Data.Maybe
@@ -63,7 +66,7 @@ getSystemFileSize path = do
 getUsefulContents :: String -> IO [String]
 getUsefulContents path = do
     names <- getDirectoryContents path
-    return (filter (`notElem` [".", ".."]) names)
+    return (map (T.unpack . (decodeUtf8With lenientDecode) . SC.pack) $ filter (`notElem` [".", ".."]) names)
 
 
 -- | accumlulate filesizes of all files in tree
@@ -121,6 +124,9 @@ treeNodeToXml node = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" ++
 	                                             (show size) ++ "\"/>"
 	xmlQuote [] = []
 	xmlQuote ('"':xs) = "&quot;" ++ (xmlQuote xs)
+	xmlQuote ('&':xs) = "&amp;" ++ (xmlQuote xs)
+	xmlQuote ('<':xs) = "&lt;" ++ (xmlQuote xs)
+	xmlQuote ('>':xs) = "&gt;" ++ (xmlQuote xs)
 	xmlQuote (x:xs) = x : (xmlQuote xs)
 
 -- | convert TreeNode to compressed xml

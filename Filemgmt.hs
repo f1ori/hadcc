@@ -30,6 +30,7 @@ dcFilelistText = T.pack dcFilelist
 getFileSize :: AppState -> String -> IO (Maybe Integer)
 getFileSize appState path = do
     IndexedFileTree fileTree htable <- readMVar $ appFileTree appState
+    writeFile "/home/flori/filelist.xml" (treeNodeToXml fileTree)
     case T.pack path of
         cpath | dcFilelistText == cpath             -> return $ Just (fromIntegral $ L.length (treeNodeToXmlBz fileTree))
              | (T.pack "TTH/") == (T.take 4 cpath)  -> returnFileSize (searchHash (T.drop 4 cpath) fileTree)

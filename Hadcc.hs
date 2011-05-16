@@ -19,6 +19,7 @@ import DCToClient
 import Filesystem
 import FilesystemHandler
 
+-- | all threads must be started after fuse loading
 start appState = do
     let config = appConfig appState
     searchSocket <- createSearchSocket
@@ -34,7 +35,7 @@ stop appState = return ()
 main = do
     config <- loadConfig "Hadcc.cfg"
     appState <- newAppState config
-    loadTTHCache appState
+    initTTHCache appState
     loadOwnShare appState
     --withMVar (appFileTree appState) (\tree -> putStrLn $ treeNodeToXml tree)
     --withMVar (appFileTree appState) (\tree -> putStrLn $ treeNodeToXml tree)

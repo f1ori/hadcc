@@ -25,9 +25,9 @@ import Control.Exception (handle, AsyncException, finally)
 import Config
 import Tcp
 
-data State = DontKnow              -- ^ Don't know, what to do with this connection, waiting for commands from peer
-           | Upload String Integer -- ^ Remember to Upload this file on next "Send" - command
-           | Download              -- ^ This connection is for downloading something from peer
+data State = DontKnow            -- ^ Don't know, what to do with this connection, waiting for commands from peer
+           | Upload L.ByteString -- ^ Remember to Upload this file on next "Send" - command
+           | Download            -- ^ This connection is for downloading something from peer
            | DownloadJob Integer (Handle -> L.ByteString -> IO Bool)  -- ^ initiate download in message handler
                                                                       --   the Integer 
                                                                       --   the function is the download handler,

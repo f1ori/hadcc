@@ -121,29 +121,23 @@ handleClient appState h conState msg = do
 	                       let filenameOffset = tail $ dropWhile (/=' ') msg
 			       let filename = takeWhile (/='$') filenameOffset
 			       let offset = read $ tail $ dropWhile (/='$') filenameOffset
-			       filelength <- getFileSize appState filename
-                               case filelength of
-                                   Just n -> do
+			       sizeAndContent<- getFileSizeAndContent appState filename offset
+                               case sizeAndContent of
+                                   Just (filesize, content) -> do
                                        putStrLn ("Filename: " ++ filename)
-                                       putStrLn ("Filesize: " ++ (show n))
-                                       sendCmd h "FileLength" (show n)
-                                       return (ToClient Nothing (Upload filename offset))
+                                       putStrLn ("Filesize: " ++ (show filesize))
+                                       sendCmd h "FileLength" (show filesize)
+                                       return (ToClient Nothing (Upload content))
                                    Nothing -> do
                                        putStrLn ("File not Found: " ++ filename)
                                        sendCmd h "Error" "File not Available"
                                        return (ToClient Nothing DontKnow)
         Just "$Send"   -> case conState of
-	                  ToClient _ (Upload filename offset) -> do
+	                  ToClient _ (Upload content) -> do
 	                       putStrLn "Send raw data"
-                               content <- getFileContent appState filename offset
-                               case content of
-                                   Just c -> do
-	                               L.hPut h c
-			               hFlush h
-			               return (ToClient Nothing DontKnow)
-                                   Nothing -> do
-                                       sendCmd h "Error" "File not found"
-			               return (ToClient Nothing DontKnow)
+	                       L.hPut h content
+			       hFlush h
+			       return (ToClient Nothing DontKnow)
 	                  ToClient _ _ -> do
 	                       putStrLn "Send without get"
 	                       putStrLn msg
@@ -162,13 +156,12 @@ handleClient appState h conState msg = do
                                        let filename = msg_split !! 2
 	                               let fileOffset = msg_split !! 3
 	                               let fileBufSize = msg_split !! 4
-			               filelength <- getFileSize appState filename
-                                       case filelength of
-                                           Just n -> do
+			               sizeAndContent <- getFileSizeAndContent appState filename (read fileOffset)
+                                       case sizeAndContent of
+                                           Just (filesize, content) -> do
                                                putStrLn ("Filename: " ++ filename)
-                                               putStrLn ("Filesize: " ++ (show n))
-                                               sendCmd h "ADCSND" ("file " ++ filename ++ " 0 " ++ (show n))
-                                               Just content <- getFileContent appState filename (read fileOffset)
+                                               putStrLn ("Filesize: " ++ (show filesize))
+                                               sendCmd h "ADCSND" ("file " ++ filename ++ " 0 " ++ (show filesize))
 	                                       L.hPut h content
 			                       hFlush h
 			                       --hClose h

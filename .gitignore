@@ -7,3 +7,7 @@ ui/js
 *.o
 DCFs
 *.log
+*.aux
+*.prof
+*.hp
+*.ps

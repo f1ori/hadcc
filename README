@@ -53,3 +53,26 @@ TODO:
 * run hashing in background
 * option to initiate reloading of share
 
+
+PROFILING:
+
+Compiling with profile information (depending library must be installed with profiling info too)
+
+$ cabal clean
+$ cabal configure  --enable-executable-profiling --enable-library-profiling --ghc-options="-auto-all -rtsopts"
+$ cabal build
+
+Time and allocation profiling:
+
+$ dist/build/hadcc/hadcc +RTS -p
+Do stuff
+$ fusermount -u mnt
+$ less hadcc.prof
+
+Heap profiling (so docs for more options)
+
+$ dist/build/hadcc/hadcc +RTS -hd
+Do stuff
+$ fusermount -u mnt
+$ hp2ps hadcc.hp && okular hadcc.ps
+

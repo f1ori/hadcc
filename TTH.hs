@@ -27,59 +27,50 @@ import Control.Monad
 import Control.Concurrent
 import Control.Exception as E
 import Data.HashTable
-import Database.SQLite
+import Database.HDBC
+import Database.HDBC.Sqlite3
 
 import Config
 import TTHTypes
 import FilelistTypes
 
--- | sqlite table for tth cache
-tthCacheTable = Table "TTHCache" [
-       (Column "Path" (SQLVarChar 255) [IsNullable False])
-     , (Column "TTH" (SQLVarChar 255) [IsNullable False])
-     , (Column "ModTime" (SQLInt BIG True False) [IsNullable False])
-     ] [TablePrimaryKey ["Path"], TableUnique ["Path"]]
-
 
 -- | init sqlite
 initTTHCache :: AppState -> IO ()
 initTTHCache appState = do
-    sqliteHandle <- openConnection (configCacheFile $ appConfig appState)
-    result <- defineTableOpt sqliteHandle True tthCacheTable
-    case result of
-        Just msg -> putStrLn ("create cache table: " ++ msg)
-        Nothing -> return ()
-    putMVar (appSQLiteHandle appState) sqliteHandle
+    conn <- connectSqlite3 (configCacheFile $ appConfig appState)
+    run conn ("CREATE TABLE IF NOT EXISTS tthcache "
+            ++ "(path VARCHAR(1024) NOT NULL PRIMARY KEY, tth VARCHAR(80) NOT NULL, "
+            ++ "modtime BIGINT NOT NULL);") []
+    commit conn
+    putStrLn "CREATE TABLE"
+    putMVar (appTTHCache appState) conn
 
 -- | get hash from sqlite cache
 getCachedHash :: AppState -> T.Text -> EpochTime -> IO (Maybe T.Text)
 getCachedHash appState path curModTime = do
-    sqliteHandle <- readMVar (appSQLiteHandle appState)
-    result <- execParamStatement sqliteHandle
-              "SELECT Path, TTH, ModTime FROM TTHCache WHERE Path=:Path"
-              [(":Path", Text $ T.unpack path)]
-    case result of
-        Left msg -> do
-                    putStrLn ("cache database error: " ++ msg)
-                    return Nothing
-        Right rows -> if null rows || (null $ head rows)
-                      then return Nothing
-                      else let row = head $ head rows
-                               path = fromJust $ Prelude.lookup "Path" row
-                               hash = fromJust $ Prelude.lookup "TTH" row
-                               modTime = read $ fromJust $ Prelude.lookup "ModTime" row
-                           in if modTime == curModTime
-                              then return $! Just $ T.pack hash
-                              else return Nothing
+    conn <- readMVar (appTTHCache appState)
+    rows <- sqlbla conn path
+    if null rows || (null $ head rows)
+        then return Nothing
+        else let row = head rows
+                 hash = fromSql $ row !! 0
+                 modTime = fromInteger $ fromSql $ row !! 1
+             in if modTime == curModTime
+                then return $! Just $ T.pack hash
+                else return Nothing
+
+sqlbla conn path = quickQuery' conn "SELECT tth, modtime FROM tthcache WHERE path=?;"
+                   [SqlString $ T.unpack path]
 
 -- | set hash in sqlite cache
 setHashInCache :: AppState -> T.Text -> T.Text -> IO ()
 setHashInCache appState path hash = do
     fileStatus <- getFileStatus (T.unpack path)
     let modTime = modificationTime fileStatus
-    sqliteHandle <- readMVar (appSQLiteHandle appState)
-    result <- insertRow sqliteHandle "TTHCache"
-              [("Path", T.unpack path), ("TTH", T.unpack hash), ("ModTime", show modTime)]
+    conn <- readMVar (appTTHCache appState)
+    run conn "INSERT INTO tthcache VALUES (?, ?, ?);" [toSql path, toSql hash, SqlString $ show modTime]
+    commit conn
     return ()
 
 

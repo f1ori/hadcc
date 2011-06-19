@@ -55,7 +55,7 @@ getFile appState path = do
     let size = fromIntegral $ fileSize fileStatus
     let modTime = modificationTime fileStatus
     hash <- getCachedHash appState (T.pack path) modTime
-    return ( hash `seq` FileNode (T.pack $ takeFileName path) (T.pack path) size modTime hash )
+    return ( hash `seq` size `seq` FileNode (T.pack $ takeFileName path) (T.pack path) size modTime hash )
 
 
 -- | get size of file from filesystem

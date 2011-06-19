@@ -17,7 +17,6 @@ import Data.ConfigFile
 import Data.Char
 import Data.Either.Utils
 import System.Directory
-import Database.SQLite
 import FilelistTypes
 import TTHTypes
 import FixedQueueTypes
@@ -63,13 +62,11 @@ data AppState = AppState {
     -- | current nicklist on hub (filesystemsafe -> original, info-string)
     , appNickList :: MVar (M.Map Nick (Nick, String))
     -- | cache for hashes, see TTH.hs
-    , appTTHCache :: MVar TTHCache
+    , appTTHCache :: TTHCache
     -- | last chat msgs
     , appChatMsgs :: FixedQueue String
     -- | cache filelists for filesystem
     , appFilelistCache :: FilelistCache
-    -- | sqlite connection to cache
-    , appSQLiteHandle :: MVar SQLiteHandle
     }
 
 -- | load config from file into config-object
@@ -108,7 +105,6 @@ newAppState appConfig = do
     tthCache <- newEmptyMVar
     chatMsgs <- newFixedQueue
     filelistCache <- newFilelistCache
-    sqliteHandle <- newEmptyMVar
     return AppState {
                      appConfig = appConfig
                    , appFileTree = fileTree
@@ -121,7 +117,6 @@ newAppState appConfig = do
                    , appTTHCache = tthCache
                    , appChatMsgs = chatMsgs
                    , appFilelistCache = filelistCache
-                   , appSQLiteHandle = sqliteHandle
                    }
 
 

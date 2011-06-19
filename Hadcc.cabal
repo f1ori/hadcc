@@ -17,12 +17,14 @@ Extra-source-files:  README
 Executable hadcc
   Build-Depends:       base, bzlib, stm, TigerHash, haskell98, bytestring, filepath,
                        directory, mtl, split, network, MissingH, ConfigFile, containers,
-                       random, unix, hslogger, deepseq, hadcc, text, regex-compat, hexpat, sqlite, blaze-builder
+                       random, unix, hslogger, deepseq, hadcc, text, regex-compat,
+                       hexpat, blaze-builder, HDBC, HDBC-sqlite3
   Main-is:             Hadcc.hs
   Ghc-options:         -threaded
   Other-Modules:       Config, DCCommon, DCToClient, DCToHub, FilelistCache, FilelistCacheTypes,
                        Filelist, FilelistTypes, Filemgmt, FilesystemHandler, Filesystem,
                        FixedQueue, FixedQueueTypes, Hadcc, Tcp, TTH, TTHTypes, Search, Udp
+  Extensions:          MultiParamTypeClasses, TypeSynonymInstances, RankNTypes
 
 
 Library

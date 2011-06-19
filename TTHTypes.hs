@@ -10,8 +10,10 @@ module TTHTypes where
 import System.Posix.Types
 import qualified Data.Map as M
 import qualified Data.Text as T
+import Control.Concurrent
+import Database.HDBC.Sqlite3
 
 -- hash and modification date as values
-type TTHCache = M.Map T.Text (T.Text, EpochTime)
+type TTHCache = MVar Connection
 
 -- vim: sw=4 expandtab

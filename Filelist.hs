@@ -18,7 +18,11 @@ import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Data.ByteString.Char8 as SC
 import qualified Codec.Compression.BZip as BZip
 import qualified Data.Text as T
+import Blaze.ByteString.Builder
+import Blaze.ByteString.Builder.Char.Utf8
+import Data.Monoid (mappend, mconcat)
 import Data.Text.Encoding (decodeUtf8With)
+import Data.Text.Lazy.Encoding (encodeUtf8)
 import Data.Text.Encoding.Error (lenientDecode)
 import Text.XML.Expat.SAX
 import Data.List
@@ -111,27 +115,31 @@ searchHash hash (DirNode _ _ children) = firstNotNothing $ map (searchHash hash)
 
 
 -- | convert TreeNode to xml
-treeNodeToXml :: TreeNode -> String
-treeNodeToXml node = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" ++ 
-                  "<FileListing Version=\"1\" Generator=\"hdc V:0.1\">" ++ 
-                  (toXml node) ++ "</FileListing>"
+treeNodeToXml :: TreeNode -> Builder
+treeNodeToXml node = (fromString "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n") `mappend`
+                  (fromString "<FileListing Version=\"1\" Generator=\"hdc V:0.1\">") `mappend`
+                  (toXml node) `mappend` (fromString "</FileListing>")
+
     where
-        toXml (DirNode name _ children)            = "<Directory Name=\"" ++ (xmlQuote $ T.unpack name) ++ "\">" ++
-	                                             (concat $ map toXml children) ++ "</Directory>"
-        toXml (FileNode name _ size _ (Just hash)) = "<File Name=\"" ++ (xmlQuote $ T.unpack name) ++ "\" Size=\"" ++
-	                                             (show size) ++ "\" TTH=\"" ++ (T.unpack hash) ++ "\"/>"
-        toXml (FileNode name _ size _ _)           = "<File Name=\"" ++ (xmlQuote $ T.unpack name) ++ "\" Size=\"" ++
-	                                             (show size) ++ "\"/>"
-	xmlQuote [] = []
-	xmlQuote ('"':xs) = "&quot;" ++ (xmlQuote xs)
-	xmlQuote ('&':xs) = "&amp;" ++ (xmlQuote xs)
-	xmlQuote ('<':xs) = "&lt;" ++ (xmlQuote xs)
-	xmlQuote ('>':xs) = "&gt;" ++ (xmlQuote xs)
-	xmlQuote (x:xs) = x : (xmlQuote xs)
+        toXml (DirNode name _ children)            = mconcat
+                                                         [fromString "<Directory Name=\"", xmlQuote name, fromString "\">",
+                                                          mconcat $ map toXml children, fromString "</Directory>" ]
+        toXml (FileNode name _ size _ (Just hash)) = mconcat [fromString "<File Name=\"", xmlQuote name,
+                                                              fromString "\" Size=\"", fromString $ show size,
+                                                              fromString "\" TTH=\"", fromText hash, fromString "\"/>" ]
+        toXml (FileNode name _ size _ _)           = mconcat [fromString "<File Name=\"", xmlQuote name,
+                                                              fromString "\" Size=\"", fromString $ show size, fromString "\"/>" ]
+        xmlQuote :: T.Text -> Builder
+        xmlQuote = fromText
+                 . T.replace (T.singleton '"') (T.pack "&quot;")
+                 . T.replace (T.singleton '&') (T.pack "&amp;")
+                 . T.replace (T.singleton '<') (T.pack "&lt;")
+                 . T.replace (T.singleton '>') (T.pack "&gt;")
+
 
 -- | convert TreeNode to compressed xml
 treeNodeToXmlBz :: TreeNode -> L.ByteString
-treeNodeToXmlBz node = (BZip.compress . C.pack . treeNodeToXml) node
+treeNodeToXmlBz node = (BZip.compress . toLazyByteString . treeNodeToXml) node
 
 
 -- | convert compressed xml to TreeNode object (this is, what you normally need)

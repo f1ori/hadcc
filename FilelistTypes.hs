@@ -18,16 +18,16 @@ import qualified Data.Text as T
 
 -- | filelist entry, a main datastructure of hadcc
 data TreeNode = DirNode  {
-                       dirNodeName     :: T.Text
-                     , dirNodePath     :: T.Text
-                     , dirNodeChildren :: [TreeNode]
+                       dirNodeName     :: !T.Text
+                     , dirNodePath     :: !T.Text
+                     , dirNodeChildren :: ![TreeNode]
                      }
           | FileNode {
-                       fileNodeName    :: T.Text
-                     , fileNodePath    :: T.Text
-                     , fileNodeSize    :: Integer
-                     , fileNodeModTime :: EpochTime
-                     , fileNodeHash    :: Maybe T.Text
+                       fileNodeName    :: !T.Text
+                     , fileNodePath    :: !T.Text
+                     , fileNodeSize    :: !Integer
+                     , fileNodeModTime :: !EpochTime
+                     , fileNodeHash    :: !(Maybe T.Text)
                      }
             deriving (Eq, Show)
 

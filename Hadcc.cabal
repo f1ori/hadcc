@@ -24,7 +24,7 @@ Executable hadcc
   Other-Modules:       Config, DCCommon, DCToClient, DCToHub, FilelistCache, FilelistCacheTypes,
                        Filelist, FilelistTypes, Filemgmt, FilesystemHandler, Filesystem,
                        FixedQueue, FixedQueueTypes, Hadcc, Tcp, TTH, TTHTypes, Search, Udp
-  Extensions:          MultiParamTypeClasses, TypeSynonymInstances, RankNTypes
+  Extensions:          MultiParamTypeClasses, TypeSynonymInstances, RankNTypes, BangPatterns
 
 
 Library

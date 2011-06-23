@@ -55,7 +55,9 @@ getSystemFileContentsWithOffset path offset = do
 loadOwnShare :: AppState -> IO ()
 loadOwnShare appState = do
     let config = appConfig appState
-    putMVar (appFileTree appState) =<< newIndexedFileTree =<< getFileList appState (configShareDir config)
+    filelist <- getFileList appState (configShareDir config)
+    indexedFilelist <- newIndexedFileTree filelist
+    putMVar (appFileTree appState) indexedFilelist
 
 reloadOwnShare :: AppState -> IO ()
 reloadOwnShare appState = do

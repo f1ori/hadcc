@@ -8,11 +8,14 @@
 module Filelist where
 
 import System.Directory
+import System.Posix.Directory
 import System.FilePath
 import System.Posix.Files
 import System.IO
+import System.IO.Unsafe
 import Data.Maybe
 import Control.Monad
+import Control.DeepSeq
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Data.ByteString.Char8 as SC
@@ -31,11 +34,26 @@ import FilelistTypes
 import TTH
 import Config
 
+fsDirList :: FilePath -> IO [FilePath]
+fsDirList dir = do
+    ds <- openDirStream dir
+    fsList ds
+    where
+        fsList ds = do
+            path <- readDirStream ds
+            if null path
+                then do
+                    rest <- fsList ds
+                    return (path:rest)
+                else do
+                    closeDirStream ds
+                    return []
+
 
 -- | create TreeNode tree from filesystem directory
 getFileList :: AppState -> FilePath -> IO TreeNode
 getFileList appState dir = do
-    names <- getUsefulContents dir
+    names <- unsafeInterleaveIO $ getUsefulContents dir
     let paths = map (dir </>) names
     nodes <- (forM paths $ \path -> do
 	        isDirectory <- doesDirectoryExist path
@@ -48,28 +66,22 @@ getFileList appState dir = do
         maybeCatch :: IO a -> IO (Maybe a)
         maybeCatch func = catch (Just `liftM` func) (\e-> return Nothing)
 
+
 -- | create TreeNode object for file in filesystem (hash is retreived from cache if available)
 getFile :: AppState -> FilePath -> IO TreeNode
 getFile appState path = do
-    fileStatus <- getFileStatus path
-    let size = fromIntegral $ fileSize fileStatus
-    let modTime = modificationTime fileStatus
-    hash <- getCachedHash appState (T.pack path) modTime
-    return ( hash `seq` size `seq` FileNode (T.pack $ takeFileName path) (T.pack path) size modTime hash )
+    fileStatus <- unsafeInterleaveIO $ getFileStatus path
+    let !size = fromIntegral $ fileSize fileStatus
+    let !modTime = modificationTime fileStatus
+    hash <- unsafeInterleaveIO $ getCachedHash appState (T.pack path) modTime
+    let !node = FileNode (T.pack $ takeFileName path) (T.pack path) size modTime hash
+    return (node `deepseq` node)
 
-
--- | get size of file from filesystem
-getSystemFileSize :: FilePath -> IO Integer
-getSystemFileSize path = do
-    h <- openFile path ReadMode
-    size <- hFileSize h
-    hClose h
-    return size
 
 -- | get useful contents of a directory (not . or ..)
 getUsefulContents :: String -> IO [String]
 getUsefulContents path = do
-    names <- getDirectoryContents path
+    names <- fsDirList path
     return (map (T.unpack . (decodeUtf8With lenientDecode) . SC.pack) $ filter (`notElem` [".", ".."]) names)
 
 

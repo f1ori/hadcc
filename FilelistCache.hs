@@ -32,16 +32,16 @@ getFilelistCached appState nick = do
 	    Nothing                  -> do
 	               -- not in cache, tell everybody, we're going to download it
                        let newcache = M.insert nick FlCEInProgress cache
-		       newcache `seq` writeTVar (appFilelistCache appState) newcache
+		       writeTVar (appFilelistCache appState) newcache
 	               return Nothing
     case result of
-        Just tree -> tree `seq` return tree
+        Just tree -> tree `deepseq` return tree
 	Nothing   -> do
 		     filelist <- downloadFilelist appState nick
 	             let tree = xmlBzToTreeNode $ L.fromChunks [filelist]
 		     atomically $ do
                          cache <- readTVar (appFilelistCache appState)
-                         let newcache = M.insert nick (FlCETreeNode tree) cache
+                         let newcache = tree `deepseq` M.insert nick (FlCETreeNode tree) cache
 		         newcache `deepseq` writeTVar (appFilelistCache appState) newcache
 		     return tree
 

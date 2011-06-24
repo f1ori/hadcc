@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 --- |
 --- | This module contains type definitions for Filelist.hs to prevent circular imports
 --- |
@@ -40,6 +41,12 @@ instance NFData TreeNode where
 
 -- | Filelist with index on tth-hashes
 data IndexedFileTree = IndexedFileTree TreeNode (HashTable T.Text TreeNode)
+
+instance NFData IndexedFileTree where
+    rnf (IndexedFileTree node hashtable) = rnf node `seq` rnf hashtable
+
+instance NFData (HashTable key val)
+
 
 -- | create IndexedFileTree from TreeNode and fill the index
 newIndexedFileTree :: TreeNode -> IO IndexedFileTree

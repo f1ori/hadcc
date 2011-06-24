@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 --- |
 --- | This module contains stuff to handle and convert Filelists alias TreeNodes
 --- |
@@ -34,6 +35,8 @@ import FilelistTypes
 import TTH
 import Config
 
+
+-- | memory efficient getDirectoryContents
 fsDirList :: FilePath -> IO [FilePath]
 fsDirList dir = do
     ds <- openDirStream dir
@@ -164,35 +167,38 @@ getAttr attrs name = fromJust $ lookup (T.pack name) attrs
 
 -- | helper function to add a node to a directory
 addToDir :: TreeNode -> TreeNode -> TreeNode
-addToDir node (DirNode name path children) = DirNode name path (node:children)
+addToDir !node !(DirNode name path children) = DirNode name path (node:children)
 
 -- | parse tagsoup tag on TreeNode stack
 processXmlTag :: [TreeNode] -> SAXEvent T.Text T.Text -> [TreeNode]
-processXmlTag result (XMLDeclaration _ _ _) = result
-processXmlTag result (StartElement tag attrs)
+processXmlTag stack (XMLDeclaration _ _ _) = stack
+processXmlTag stack (StartElement tag attrs)
                            | tag == (T.pack "FileListing") = [DirNode (T.pack "base") T.empty []] 
-                           | tag == (T.pack "Directory")   = (DirNode (getAttr attrs "Name") T.empty []) : result
+                           | tag == (T.pack "Directory")   = (DirNode (getAttr attrs "Name") T.empty []) : stack
                            | tag == (T.pack "File")        = let file = FileNode (getAttr attrs "Name") T.empty 
                                                                            (read $ T.unpack $ getAttr attrs "Size") 0
                                                                            (Just $ getAttr attrs "TTH")
-                                                           in (addToDir file (head result)) : (tail result)
+                                                             in file `deepseq` (addToDir file (head stack)) : (tail stack)
                            | otherwise = error ("unknown tag: " ++ (show tag))
-processXmlTag result (EndElement tag)
-                           | tag == (T.pack "File") = result
-                           | tag == (T.pack "Directory") = addToDir (result !! 0) (result !! 1) : (tail $ tail result)
-                           | tag == (T.pack "FileListing") = result
-                           | otherwise = error ("unknown close tag: " ++ (show tag))
-processXmlTag result (CharacterData _)           = result
-processXmlTag result (StartCData)                = result
-processXmlTag result (EndCData)                  = result
-processXmlTag result (ProcessingInstruction _ _) = result
-processXmlTag result (Comment _)                 = result
-processXmlTag result (FailDocument msg)          = error ("parsing error: " ++ (show msg))
+processXmlTag stack@(x:y:rest) (EndElement tag)
+                           | tag == (T.pack "Directory")   = (addToDir x y) : rest
+processXmlTag stack (EndElement tag)
+                           | tag == (T.pack "File")        = stack
+                           | tag == (T.pack "FileListing") = stack
+                           | otherwise                     = error ("unknown close tag: " ++ (show tag))
+processXmlTag stack (CharacterData _)           = stack
+processXmlTag stack (StartCData)                = stack
+processXmlTag stack (EndCData)                  = stack
+processXmlTag stack (ProcessingInstruction _ _) = stack
+processXmlTag stack (Comment _)                 = stack
+processXmlTag stack (FailDocument msg)          = error ("parsing error: " ++ (show msg))
         
 
 -- | convert xml to TreeNode object
 xmlToTreeNode :: L.ByteString -> TreeNode
 xmlToTreeNode xml = head $ foldl' processXmlTag [] (parseHere xml)
+    where
+        strictProcessXmlTag s e = let newstack = processXmlTag s e in newstack `deepseq` newstack
 
 parseHere xml = (parse defaultParseOptions xml)
 

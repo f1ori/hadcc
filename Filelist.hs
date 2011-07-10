@@ -34,6 +34,7 @@ import Data.Maybe
 import FilelistTypes
 import TTH
 import Config
+import FilelistXml
 
 
 -- | memory efficient getDirectoryContents
@@ -192,13 +193,15 @@ processXmlTag stack (EndCData)                  = stack
 processXmlTag stack (ProcessingInstruction _ _) = stack
 processXmlTag stack (Comment _)                 = stack
 processXmlTag stack (FailDocument msg)          = error ("parsing error: " ++ (show msg))
-        
+
 
 -- | convert xml to TreeNode object
+--xmlToTreeNode :: L.ByteString -> TreeNode
+--xmlToTreeNode xml = head $ foldl' processXmlTag [] (parseHere xml)
+--    where
+--        strictProcessXmlTag s e = let newstack = processXmlTag s e in newstack `deepseq` newstack
 xmlToTreeNode :: L.ByteString -> TreeNode
-xmlToTreeNode xml = head $ foldl' processXmlTag [] (parseHere xml)
-    where
-        strictProcessXmlTag s e = let newstack = processXmlTag s e in newstack `deepseq` newstack
+xmlToTreeNode xml = head $ parseXml xml
 
 parseHere xml = (parse defaultParseOptions xml)
 

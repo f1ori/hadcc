@@ -46,6 +46,12 @@ searchScript = "#!/bin/bash\n\
                \f=`dirname \"$0\"`\n\
                \exec 3<>$f/search; echo $1>&3; trap 'exec 3>&-' INT; cat <&3\n"
 
+-- | small script how to use the reload function
+reloadScript = "#!/bin/bash\n\
+               \# Small example how to use reloadshare\n\n\
+               \f=`dirname \"$0\"`\n\
+               \echo bla >>$f/reloadshare\n"
+
 -- | file handle for dc shares
 shareContentHandler :: AppState -> Nick -> TreeNode -> FsContent
 shareContentHandler appState nick (FileNode _ _ _ _ (Just hash)) = FsFile openF openInfo
@@ -214,7 +220,7 @@ dcFileInfo appState path = do
     case path of
 
         "/" -> return $ Just (getStatDir ugid, FsDir
-               (return ["nicks", "status", "myshare", "search", "dosearch", "chat", "reloadshare"]))
+               (return ["nicks", "status", "myshare", "search", "dosearch", "chat", "reloadshare", "doreloadshare"]))
 
         "/nicks" -> do
 		    return $ Just (getStatDir ugid, FsDir (M.keys `liftM` readMVar (appNickList appState)))
@@ -228,6 +234,8 @@ dcFileInfo appState path = do
         "/dosearch" -> return $ Just (getStatFileRX ugid 0, (textContentHandler searchScript))
 
         "/reloadshare" -> return $ Just (getStatFileRW ugid 0, (reloadShareContentHandler appState))
+
+        "/doreloadshare" -> return $ Just (getStatFileRX ugid 0, (textContentHandler reloadScript))
 
         _ | (take 7 path) == "/nicks/" -> do
 	      nicklist <- readMVar (appNickList appState)

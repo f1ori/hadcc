@@ -7,6 +7,7 @@ import Data.Maybe
 import Control.Monad
 import Control.Concurrent.MVar
 import qualified Data.HashTable as H
+import Data.Char (isAlphaNum)
 
 import Config
 import FilelistTypes
@@ -217,7 +218,8 @@ searchInDb appState search = do
         isTTHSearch = (searchDataType search) == TTH
 
         regex = map (toRegex.T.unpack) $ T.splitOn (T.pack " ") $ T.pack $ searchPattern search
-        toRegex str = mkRegexWithOpts str False False
+        toRegex str = mkRegexWithOpts (escapeRegex str) False False
+        escapeRegex = filter isAlphaNum
 
         toList :: TreeNode -> [TreeNode]
         toList node@(FileNode _ _ _ _ _) = [node]

@@ -51,6 +51,7 @@ type CloseFunc = IO ()
 type FileHandle = (ReadFunc, Maybe WriteFunc, CloseFunc)
 type UserGroupID = (UserID, GroupID)
 
+
 -- | get user and group id of current user
 getUserGroupID :: IO UserGroupID
 getUserGroupID = do
@@ -58,11 +59,13 @@ getUserGroupID = do
    gid <- getRealGroupID
    return (uid, gid)
 
+
 -- helpers for usefull stats
 getStatDir ugid = getStat ugid Directory "rx" 0
 getStatFileR ugid size = getStat ugid RegularFile "r" size
 getStatFileRW ugid size = getStat ugid RegularFile "rw" size
 getStatFileRX ugid size = getStat ugid RegularFile "rx" size
+
 
 -- | helper for generic file/directory stat
 getStat :: Integral n => UserGroupID -> EntryType -> String -> n -> FileStat
@@ -107,15 +110,18 @@ fsOpen infoHandler path mode flags = do
 fsRead :: FilePath -> FileHandle -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
 fsRead path (readFunc, _, _) size offset = Right `liftM` readFunc (fromIntegral size) (fromIntegral offset)
 
+
 -- | fuse write handler
 fsWrite :: FilePath -> FileHandle -> B.ByteString -> FileOffset -> IO (Either Errno ByteCount)
 fsWrite path (_, writeFunc, _) stuff offset = case writeFunc of
    Just writeF -> Right `liftM` writeF stuff (fromIntegral offset)
    Nothing     -> return $ Left eACCES
 
+
 -- | fuse release (close systemcall) handler
 fsRelease :: FilePath -> FileHandle -> IO ()
 fsRelease path (_, _, closeFunc) = closeFunc
+
 
 -- | fuse opendir handler
 fsOpenDir :: FileInfoHandler -> FilePath -> IO Errno
@@ -152,6 +158,7 @@ fsReleaseDir :: FileInfoHandler -> FilePath -> IO Errno
 fsReleaseDir infoHandler path = do
     return eOK
 
+
 -- | fuse getstat handler
 fsGetStat :: FileInfoHandler -> FilePath -> IO (Either Errno FileStat)
 fsGetStat infoHandler path = do
@@ -159,6 +166,16 @@ fsGetStat infoHandler path = do
     case info of
         Just (stat, _) -> return $ Right stat
 	Nothing        -> return $ Left eNOENT
+
+
+-- | fuse getstat handler
+fsAccess :: FileInfoHandler -> FilePath -> Int -> IO Errno
+fsAccess infoHandler path amode = do
+    info <- infoHandler path
+    case info of
+        Just (stat, _) -> return eOK
+	Nothing        -> return eNOENT
+
 
 fuseOps startHandler stopHandler infoHandler = defaultFuseOps {
         fuseInit = startHandler,
@@ -170,13 +187,16 @@ fuseOps startHandler stopHandler infoHandler = defaultFuseOps {
         fuseOpenDirectory = fsOpenDir infoHandler,
         fuseReadDirectory = fsReadDir infoHandler,
         fuseReleaseDirectory = fsReleaseDir infoHandler,
-	fuseGetFileStat = fsGetStat infoHandler
+	fuseGetFileStat = fsGetStat infoHandler,
+	fuseAccess = fsAccess infoHandler
     }
+
 
 -- | start fuse manager, puts program in background
 startupFileSystem :: FilePath -> IO () -> IO () -> FileInfoHandler -> IO ()
 startupFileSystem mountpoint startHandler stopHandler infoHandler = do
     --withArgs [mountpoint] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler
     withArgs [mountpoint, "-f", "-d"] $ fuseMain (fuseOps startHandler stopHandler infoHandler) defaultExceptionHandler
+
 
 -- vim: sw=4 expandtab

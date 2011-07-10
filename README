@@ -17,6 +17,7 @@ REQUIREMENTS:
 HOW TO RUN:
 
 install missing libraries with "cabal install libx"
+$ cabal install -p --only-dependencies
 
 rename and edit config file
 
@@ -29,9 +30,8 @@ $ fusermount -u mointpoint
 
 HOW TO INSTALL:
 
-install missing libraries with "cabal install libx"
-
 $ runhaskell Setup.lhs configure --prefix=$HOME --user
+$ cabal install -p --only-dependencies
 $ runhaskell Setup.lhs build
 $ runhaskell Setup.lhs install
 

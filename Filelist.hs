@@ -121,6 +121,14 @@ searchNode path dir@(DirNode name _ children)
 	firstPath path = T.takeWhile (/='/') path
         restPath str = T.tail $ T.dropWhile (/='/') path
 
+-- | search Node in TreeNode by path
+searchNodeL :: T.Text -> [TreeNode] -> Maybe TreeNode
+searchNodeL path nodes | T.length path <= 1 = Just $ DirNode T.empty T.empty nodes
+                       | otherwise   = firstNotNothing $ map (searchNode $ T.tail path) nodes
+    where
+        restPath str = T.tail $ T.dropWhile (/='/') path
+
+
 -- | search hash in TreeNode
 searchHash :: T.Text -> TreeNode -> Maybe TreeNode
 searchHash hash file@(FileNode _ _ _ _ (Just fhash))
@@ -159,7 +167,7 @@ treeNodeToXmlBz node = (BZip.compress . toLazyByteString . treeNodeToXml) node
 
 
 -- | convert compressed xml to TreeNode object (this is, what you normally need)
-xmlBzToTreeNode :: L.ByteString -> TreeNode
+xmlBzToTreeNode :: L.ByteString -> [TreeNode]
 xmlBzToTreeNode xmlbz = (xmlToTreeNode . BZip.decompress) xmlbz
 
 -- | helper function, to extract attribute value from attributelist
@@ -200,8 +208,8 @@ processXmlTag stack (FailDocument msg)          = error ("parsing error: " ++ (s
 --xmlToTreeNode xml = head $ foldl' processXmlTag [] (parseHere xml)
 --    where
 --        strictProcessXmlTag s e = let newstack = processXmlTag s e in newstack `deepseq` newstack
-xmlToTreeNode :: L.ByteString -> TreeNode
-xmlToTreeNode xml = head $ parseXml xml
+xmlToTreeNode :: L.ByteString -> [TreeNode]
+xmlToTreeNode xml = parseXml xml
 
 parseHere xml = (parse defaultParseOptions xml)
 

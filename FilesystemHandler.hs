@@ -201,6 +201,7 @@ reloadShareContentHandler appState = FsFile openF openInfo
         readF size offset = return $ B.pack ""
         writeF content offset = return $ fromIntegral $ B.length content
 
+
 -- | filesystem handler providing directory structure of TreeNode
 treeNodeFsHandler :: (TreeNode -> FsContent) -> TreeNode -> UserGroupID -> FileInfoHandler
 treeNodeFsHandler contentHandler (DirNode name _ _) ugid "" = do
@@ -211,6 +212,17 @@ treeNodeFsHandler contentHandler tree ugid path = do
         Just node@(FileNode _ _ size _ _) -> return $! Just (getStatFileR ugid size, contentHandler node)
         Just (DirNode _ _ children)       -> return $! Just (getStatDir ugid, FsDir (return $ map (T.unpack.nodeToName) children))
         Nothing                           -> return Nothing
+
+
+-- | filesystem handler providing directory structure of TreeNode-List
+treeNodeFsHandlerL :: (TreeNode -> FsContent) -> [TreeNode] -> UserGroupID -> FileInfoHandler
+treeNodeFsHandlerL contentHandler tree ugid path = do
+    putStrLn ("fshandlerL" ++ path)
+    case searchNodeL (T.pack path) tree of
+        Just node@(FileNode _ _ size _ _) -> return $! Just (getStatFileR ugid size, contentHandler node)
+        Just (DirNode _ _ children)       -> return $! Just (getStatDir ugid, FsDir (return $ map (T.unpack.nodeToName) children))
+        Nothing                           -> return Nothing
+
 
 -- | filesystem handler providing base structure
 dcFileInfo :: AppState -> FileInfoHandler
@@ -254,7 +266,7 @@ dcFileInfo appState path = do
                                                               let Just (completeNick, _) = M.lookup nick nicklist
                                                               let sharepath = drop 6 subpath
                                                               share <- getFilelistCached appState completeNick
-                                                              share `seq` treeNodeFsHandler (shareContentHandler appState completeNick) share ugid sharepath
+                                                              treeNodeFsHandlerL (shareContentHandler appState completeNick) share ugid sharepath
                             | otherwise                    -> return Nothing
 		      
 		  else return Nothing

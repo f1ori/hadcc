@@ -51,7 +51,6 @@ TODO:
 * support multiple root share directories (currently only with symlinks)
 * list current transfers in some file
 * run hashing in background
-* option to initiate reloading of share
 
 
 PROFILING:
@@ -75,4 +74,10 @@ $ dist/build/hadcc/hadcc +RTS -hd
 Do stuff
 $ fusermount -u mnt
 $ hp2ps hadcc.hp && okular hadcc.ps
+
+
+CONTRIBUTIONS/QUESTIONS:
+
+feel free to contact me at mail@f1ori.de
+
 

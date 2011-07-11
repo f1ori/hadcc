@@ -16,7 +16,7 @@ import FilelistTypes
 
 -- | filelist or notice, that some thread is downloading
 -- | the filelist right now
-data FilelistCacheEntry = FlCETreeNode !TreeNode
+data FilelistCacheEntry = FlCETreeNode ![TreeNode]
                         | FlCEInProgress
 type FilelistCache = TVar (M.Map String FilelistCacheEntry)
 

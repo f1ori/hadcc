@@ -22,20 +22,20 @@ import DCToClient
 
 -- | download filelist of some user.
 -- | the filelist will be cached, so the next request should be fast
-getFilelistCached :: AppState -> Nick -> IO TreeNode
+getFilelistCached :: AppState -> Nick -> IO [TreeNode]
 getFilelistCached appState nick = do
     result <- atomically $ do
         cache <- readTVar (appFilelistCache appState)
 	case M.lookup nick cache of
 	    Just FlCEInProgress      -> retry
-	    Just (FlCETreeNode tree) -> return $! Just tree
+	    Just (FlCETreeNode tree) -> return $ Just tree
 	    Nothing                  -> do
 	               -- not in cache, tell everybody, we're going to download it
                        let newcache = M.insert nick FlCEInProgress cache
 		       writeTVar (appFilelistCache appState) newcache
 	               return Nothing
     case result of
-        Just tree -> tree `deepseq` return tree
+        Just tree -> return tree
 	Nothing   -> do
 		     filelist <- downloadFilelist appState nick
 	             let tree = xmlBzToTreeNode $ L.fromChunks [filelist]

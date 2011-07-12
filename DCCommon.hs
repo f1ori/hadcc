@@ -28,11 +28,13 @@ import Tcp
 data State = DontKnow            -- ^ Don't know, what to do with this connection, waiting for commands from peer
            | Upload L.ByteString -- ^ Remember to Upload this file on next "Send" - command
            | Download            -- ^ This connection is for downloading something from peer
-           | DownloadJob Integer (Handle -> L.ByteString -> IO Bool)  -- ^ initiate download in message handler
-                                                                      --   the Integer 
-                                                                      --   the function is the download handler,
-                                                                      --   the return value indicates, if the connection should
-                                                                      --   be closed after the download
+           | DownloadJob Integer (Handle -> L.ByteString -> IO ()) (Handle -> IO Bool)
+                                 -- ^ initiate download in message handler
+                                 --   the Integer 
+                                 --   the function is the download handler,
+                                 --   the return value indicates, if the connection should
+                                 --   be closed after the download
+
 -- | connection state
 data ConnectionState = ToClient (Maybe Nick) State
                      | ToHub
@@ -43,10 +45,11 @@ openDCConnection :: String   -- ^ host name to connect
                  -> ConnectionState -- ^ initial connection state
                  -> (Handle -> IO ()) -- ^ handler called right after connection is established
                  -> (Handle -> ConnectionState -> String -> IO ConnectionState) -- ^ handler called for every DC message
+                 -> (ConnectionState -> IO ()) -- ^ handler called when connection closed
                  -> IO ()
-openDCConnection host port conState startHandler mainHandler = do
+openDCConnection host port conState startHandler mainHandler stopHandler = do
     (sock, addr) <- tcpClientConnect host port
-    dcConnectionHandler conState startHandler mainHandler sock addr
+    dcConnectionHandler conState startHandler mainHandler stopHandler sock addr
 
 -- | start listening for connections (blocks)
 startDCServer :: String -- ^ hostname/ip to listen on
@@ -54,9 +57,10 @@ startDCServer :: String -- ^ hostname/ip to listen on
               -> ConnectionState -- ^ initial connection state
               -> (Handle -> IO ()) -- ^ handler called right after connection is established
               -> (Handle -> ConnectionState -> String -> IO ConnectionState) -- ^ handler called for every DC message
+              -> (ConnectionState -> IO ()) -- ^ handler called when connection terminated
               -> IO ()
-startDCServer ip port conState startHandler mainHandler =
-    tcpServer ip port (dcConnectionHandler conState startHandler mainHandler)
+startDCServer ip port conState startHandler mainHandler stopHandler =
+    tcpServer ip port (dcConnectionHandler conState startHandler mainHandler stopHandler)
 
 ------------------------------------------------------------
 
@@ -64,37 +68,47 @@ startDCServer ip port conState startHandler mainHandler =
 dcConnectionHandler :: ConnectionState
                     -> (Handle -> IO ()) -- ^ handler called right after connection is established
                     -> (Handle -> ConnectionState -> String -> IO ConnectionState) -- ^ handler called for every DC message
+                    -> (ConnectionState -> IO ()) -- ^ handler called after connection terminated
                     -> Socket
                     -> SockAddr
                     -> IO ()
-dcConnectionHandler conState startHandler mainHandler sock addr = do
+dcConnectionHandler conState startHandler mainHandler stopHandler sock addr = do
     h <- socketToHandle sock ReadWriteMode
     hSetBuffering h (BlockBuffering Nothing)
     -- send some commands at start
     startHandler h
     content <- L.hGetContents h
-    (procMessages h conState mainHandler content) `finally` hClose h
+    lastConState <- procMessages h conState mainHandler content
+    hClose h
+    stopHandler lastConState
     putStrLn "closed"
 
 ------------------------------------------------------
 
 -- | process messages from hub or peer
-procMessages :: Handle -> ConnectionState -> (Handle -> ConnectionState -> String -> IO ConnectionState) -> L.ByteString -> IO ()
-procMessages h conState handler content | L.null content = return ()
+procMessages :: Handle
+             -> ConnectionState
+             -> (Handle -> ConnectionState -> String -> IO ConnectionState)
+             -> L.ByteString
+             -> IO ConnectionState
+procMessages h conState handler content | L.null content = return conState
                                         | otherwise = do
     let (msg, msgs_with_pipe) = L.break (==0x7c) content
     let msgs = L.tail msgs_with_pipe
-    newState <- handler h conState (C.unpack msg)
-    (newState2, msgs2, finish) <- case newState of
-        ToClient nick (DownloadJob size downloadHandler) -> do
-                    putStrLn "Download File"
-                    let (file, new_msgs) = L.splitAt (fromInteger size) msgs
-                    finish <- downloadHandler h file
-                    return ((ToClient nick Download), new_msgs, finish)
-        _ -> return (newState, msgs, False)
+    (newState2, next_msgs, finish) <- do {
+        newState <- handler h conState (C.unpack msg);
+        case newState of
+            ToClient nick (DownloadJob size downloadHandler nextHandler) -> do
+                        putStrLn "Download File"
+                        let (file, next_msgs) = L.splitAt (fromInteger size) msgs
+                        downloadHandler h file
+                        finish <- nextHandler h
+                        return ((ToClient nick Download), next_msgs, finish)
+            _ -> return (newState, msgs, False)
+    } `catch` (\e -> return (conState, msgs, True))
     if not finish
-         then procMessages h newState2 handler msgs2
-         else return ()
+         then procMessages h newState2 handler next_msgs
+         else return newState2
 
 
 -- | extracts command from DC message

@@ -92,7 +92,7 @@ handleHub appState searchSocket h conState msg = do
 			       let port = tail $ dropWhile (/=':') hostport
 	                       putStrLn ("Connect to me " ++ hostport)
 			       forkIO $ openDCConnection host port (ToClient Nothing DontKnow)
-			                                 (startupClient appState) (handleClient appState)
+			                                 (startupClient appState) (handleClient appState) (stopClient appState)
 			       return conState
         Just "$Search" -> do
                                let (response, search) = dcToSearch $ T.pack msg

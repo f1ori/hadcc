@@ -8,6 +8,7 @@
 module DCToClient (
       startupClient
     , handleClient
+    , stopClient
     , downloadFilelist
     , downloadFile
     ) where
@@ -24,6 +25,7 @@ import Data.List.Split
 import Data.Char (toLower)
 import Control.Monad
 import Control.Concurrent.STM
+import Control.Exception (finally)
 import System.Random (randomRIO)
 import Config
 import Filemgmt
@@ -48,7 +50,7 @@ nextToDownload appState nick = do
     return (M.lookup nick jobs)
 
 -- | get next file (if any), which is queued to be downloaded from this nick
--- | if there is non, wait at least 5 seconds for now ones
+-- | if there is non, wait at least 5 seconds for new ones
 nextToDownloadBlock :: AppState -> Nick -> IO (Maybe DcJob)
 nextToDownloadBlock appState nick = do
     timeout 5000000 $ atomically $ do
@@ -75,6 +77,8 @@ handleClient appState h conState msg = do
                                 -- TODO: check if known
                                 let nick = tail $ dropWhile (/=' ') msg
 	                        putStrLn ("Connection from: " ++ nick)
+                                -- add connection to connectionlist
+                                modifyMVar_ (appConnections appState) (return . (nick:))
                                 next <- nextToDownload appState nick
                                 case next of
                                     Just (Job file _) -> return (ToClient (Just nick) Download)
@@ -185,7 +189,7 @@ handleClient appState h conState msg = do
 	                               let fileBufSize = read (msg_split !! 4)
                                        let (ToClient (Just nick) _) = conState
                                        Just (Job file handler) <- nextToDownload appState nick
-                                       return (ToClient Nothing (DownloadJob fileBufSize handler))
+                                       return (ToClient (Just nick) (DownloadJob fileBufSize handler (nextHandler appState nick)))
         Nothing         -> do
 	                       putStrLn "No Command:"
 	                       putStrLn msg
@@ -195,11 +199,25 @@ handleClient appState h conState msg = do
 	                       putStrLn msg
 			       return conState
     where
-        downloadHandler :: Handle -> L.ByteString -> IO Bool
+        downloadHandler :: Handle -> L.ByteString -> IO ()
         downloadHandler handle file = do
             L.writeFile "test.bla" file
-            return True
+        nextHandler :: AppState -> Nick -> Handle -> IO Bool
+        nextHandler appState nick handle = do
+            putStrLn "what's to download?"
+            next <- nextToDownloadBlock appState nick
+            case next of
+                Just (Job file _) -> do
+                                         putStrLn ("next: " ++ (file))
+                                         sendCmd h "ADCGET" ("file " ++ file ++ " 0 -1")
+                                         return False
+                _                 -> return True
 
+stopClient :: AppState -> ConnectionState -> IO ()
+stopClient appState lastConState = do
+    case lastConState of
+        ToClient (Just nick) _ -> modifyMVar_ (appConnections appState) (return . delete nick)
+        _ -> return ()
 
 -- | synchronized download of filelist
 downloadFilelist :: AppState -> Nick -> IO B.ByteString
@@ -213,7 +231,6 @@ downloadFilelist appState nick = do
             let fileNonLazy = B.concat $ L.toChunks content
             fileNonLazy `seq` putMVar mvar fileNonLazy
             putStrLn "download complete (handler)"
-            return True
 
 
 -- | asynchronous download start, should be called from different thread
@@ -225,16 +242,20 @@ downloadFile appState downloadHandler nick file = do
             jobs <- readTVar (appJobs appState)
             when (M.member nick jobs) retry
             writeTVar (appJobs appState) (M.insert nick (Job file (deleteJobWrapper appState nick downloadHandler)) jobs)
-        withMVar (appHubHandle appState) $ \hubHandle -> do
-            sendCmd hubHandle "ConnectToMe" (nick ++ " " ++ (configMyIp $ appConfig appState) ++ ":" ++ (configMyPort $ appConfig appState))
+        connections <- readMVar (appConnections appState)
+        putStrLn ("connections: " ++ (show connections))
+        if nick `notElem` connections
+            then withMVar (appHubHandle appState) $ \hubHandle -> do
+                sendCmd hubHandle "ConnectToMe" (nick ++ " " ++ (configMyIp $ appConfig appState) ++ ":" ++ (configMyPort $ appConfig appState))
+            else return ()
     where
         -- 
         deleteJobWrapper :: AppState -> Nick -> DownloadHandler -> DownloadHandler
         deleteJobWrapper appState nick nestedHandler handle content = do
-            result <- nestedHandler handle content
-            atomically $ do
-                    jobs <- readTVar (appJobs appState)
-                    writeTVar (appJobs appState) (M.delete nick jobs)
-            return result
+            nestedHandler handle content `finally` removeJob appState nick
+
+        removeJob appState nick = atomically $ do
+                        jobs <- readTVar (appJobs appState)
+                        writeTVar (appJobs appState) (M.delete nick jobs)
             
 -- vim: sw=4 expandtab

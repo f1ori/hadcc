@@ -24,6 +24,7 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.Text as T
 import Data.Text.Encoding as E
 import Data.Tuple
+import Data.Maybe
 
 import Config
 import Filesystem
@@ -38,7 +39,7 @@ import Search
 import Filemgmt
 import TTH
 
-peer_timeout = 2000000
+peer_timeout = 6000000
 
 -- | small script how to use the search
 searchScript = "#!/bin/bash\n\
@@ -72,7 +73,7 @@ shareContentHandler appState nick (FileNode _ _ _ _ (Just hash)) = FsFile openF 
         openF _       = return $ Left eACCES
 
         readF :: MVar L.ByteString -> ReadFunc
-        readF contentMVAr size offset = do
+        readF contentMVAr size offset = checkFuseInterruptDefault B.empty $ do
             lazyResult <- modifyMVar contentMVAr (return . swap . L.splitAt (fromInteger size))
             return (B.concat $ L.toChunks lazyResult)
 
@@ -85,8 +86,13 @@ shareContentHandler appState nick (FileNode _ _ _ _ (Just hash)) = FsFile openF 
             -- wait for finished MVar to be empty
             putMVar finishedMVar ()
             -- prevent further reads
-            void $ takeMVar contentMVar
-            return True
+            content <- takeMVar contentMVar
+            --putStrLn ("encounter: " ++ (show $ L.length content))
+            if L.null content
+                then return ()
+                else do
+                    putStrLn "not emptyyyyyyyyyyyy"
+                    ioError (userError "file not fully consumed, cut connection")
 
 
 -- | file content handler, providing data from local share
@@ -133,6 +139,16 @@ checkFuncOnInterval interval checkFunc workFunc = do
                 then return Nothing
                 else checkFuncOnInterval interval checkFunc workFunc
 
+
+-- | function to check for fuser interrupts
+checkFuseInterrupt :: IO a -> IO (Maybe a)
+checkFuseInterrupt = checkFuncOnInterval 1000000 isFuseInterrupted
+
+-- | function to check for fuse interrupts, takes default result
+checkFuseInterruptDefault :: a -> IO a -> IO a
+checkFuseInterruptDefault def action = fromMaybe def `liftM` checkFuseInterrupt action
+
+
 -- | search file handler
 searchContentHandler :: AppState -> FsContent
 searchContentHandler appState = FsFile openF openInfo
@@ -147,7 +163,7 @@ searchContentHandler appState = FsFile openF openInfo
                    , fsNonseekable = True
                    }
         readF sock size offset = do
-            result <- checkFuncOnInterval 1000000 isFuseInterrupted (recv sock (fromInteger size))
+            result <- checkFuseInterrupt (recv sock (fromInteger size))
             case result of
                 Just content -> return $ B.pack $ printSearchResult $ dcToSearchResult $ E.decodeUtf8 content
                 Nothing      -> return $ B.empty
@@ -167,17 +183,14 @@ chatContentHandler appState = FsFile openF openInfo
                    , fsKeepCache = False
                    , fsNonseekable = True
                    }
-        readF appState queueIndex size offset = do
-            result <- checkFuncOnInterval 1000000 isFuseInterrupted $
+        readF appState queueIndex size offset =
+            checkFuseInterruptDefault B.empty $
                 modifyMVar queueIndex $ \index -> do
                     putStrLn $ show index
                     chat <- atomically $ readTVar (appChatMsgs appState)
                     putStrLn $ show chat
                     (newIndex, msg) <- takeOneFixedQueue (appChatMsgs appState) index
                     return (newIndex, B.pack (msg ++ "\n"))
-            case result of
-                Just content -> return content
-                Nothing      -> return B.empty
         writeF appState content offset = do
             sendChatMsg appState (E.decodeUtf8 content)
             return $ fromIntegral $ B.length content
@@ -217,7 +230,6 @@ treeNodeFsHandler contentHandler tree ugid path = do
 -- | filesystem handler providing directory structure of TreeNode-List
 treeNodeFsHandlerL :: (TreeNode -> FsContent) -> [TreeNode] -> UserGroupID -> FileInfoHandler
 treeNodeFsHandlerL contentHandler tree ugid path = do
-    putStrLn ("fshandlerL" ++ path)
     case searchNodeL (T.pack path) tree of
         Just node@(FileNode _ _ size _ _) -> return $! Just (getStatFileR ugid size, contentHandler node)
         Just (DirNode _ _ children)       -> return $! Just (getStatDir ugid, FsDir (return $ map (T.unpack.nodeToName) children))

@@ -24,7 +24,7 @@ import FilelistCacheTypes
 
 type Nick = String
 
-type DownloadHandler = Handle -> L.ByteString -> IO Bool
+type DownloadHandler = Handle -> L.ByteString -> IO ()
 -- | a download job, with filename and download handler
 data DcJob = Job String DownloadHandler
 
@@ -51,6 +51,8 @@ data AppState = AppState {
     , appFileTree :: MVar IndexedFileTree
     -- | job for the nicks, a file to download
     , appJobs :: TVar (M.Map Nick DcJob)
+    -- | connections to nicks
+    , appConnections :: MVar [Nick]
     -- | filelists of nicks to transfer it to other function/thread (TODO remove)
     , appFilelists :: TVar (M.Map Nick B.ByteString)
     -- | unused
@@ -97,6 +99,7 @@ newAppState :: AppConfig -> IO AppState
 newAppState appConfig = do
     fileTree <- newEmptyMVar
     jobs <- newTVarIO M.empty
+    connections <- newMVar []
     filelists <- newTVarIO M.empty
     uploads <- newMVar []
     downloads <- newMVar []
@@ -109,6 +112,7 @@ newAppState appConfig = do
                      appConfig = appConfig
                    , appFileTree = fileTree
                    , appJobs = jobs
+                   , appConnections = connections
                    , appFilelists = filelists
                    , appUploads = uploads
                    , appDownloads = downloads

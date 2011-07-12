@@ -24,9 +24,9 @@ start appState = do
     let config = appConfig appState
     searchSocket <- createSearchSocket
     forkIO $ startDCServer (configMyIp config) (configMyPort config) (ToClient Nothing DontKnow)
-                           (startupClient appState) (handleClient appState)
+                           (startupClient appState) (handleClient appState) (stopClient appState)
     forkIO $ openDCConnection (configHubIp config) (configHubPort config) ToHub
-                              (startupHub appState) (handleHub appState searchSocket)
+                              (startupHub appState) (handleHub appState searchSocket) (\state -> return ())
     forkIO $ hashFileList appState
     return ()
     
